@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Chaque compte ne lit et n'écrit que ses propres données.
 // Si le propriétaire active le partage (users/{uid}.shareEnabled == true),
-// tout le monde peut LIRE ses albums, collections, éditeurs et compteurs, sans rien pouvoir modifier.
+// tout le monde peut LIRE ses albums, collections, éditeurs, photos et compteurs, sans rien pouvoir modifier.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -44,6 +44,12 @@ service cloud.firestore {
       }
 
       match /publishers/{id} {
+        allow read: if canRead(uid);
+        allow write: if isOwner(uid);
+      }
+
+      // Photos de couverture prises au téléphone (≈ 200 Ko maximum chacune).
+      match /covers/{id} {
         allow read: if canRead(uid);
         allow write: if isOwner(uid);
       }

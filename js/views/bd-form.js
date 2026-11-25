@@ -1,10 +1,11 @@
 import { getBd, saveBd, suggest, findBdByIsbn, getCollectionDoc } from "../db.js";
 import { coverHtml, spinner, emptyState } from "../components.js";
-import { ETATS } from "../constants.js";
-import { esc, debounce, todayIso, parseNumber } from "../utils.js";
+import { ETATS, COTES } from "../constants.js";
+import { esc, debounce, todayIso } from "../utils.js";
 import { icon, toast, errorHtml } from "../ui.js";
 import { lookupIsbn, normalizeIsbn, isValidIsbn } from "../isbn.js";
 import { scanIsbn } from "../scanner.js";
+import { makeCoverPhoto, isDataUrl } from "../image.js";
 
 const v = (x) => esc(x ?? "");
 
@@ -19,7 +20,7 @@ export async function render(ctx) {
     if (!ctx.alive()) return;
     if (!bd) return ctx.render(emptyState("Cet album n’existe plus"));
   }
-  const pre = { etat: "nc", ...(bd || {}) };
+  const pre = { etat: "nc", cote: 0, ...(bd || {}) };
   if (!bd) {
     const q = ctx.query;
     if (q.get("isbn")) pre.isbn = q.get("isbn");
@@ -44,11 +45,24 @@ export async function render(ctx) {
         <p class="hint" data-isbn-msg aria-live="polite"></p>
       </section>
 
-      <div class="form-cover">
+      <section class="form-cover">
         <div data-cover>${coverHtml(pre, "cover-md")}</div>
-        <label class="field"><span>Couverture (adresse de l’image)</span>
-          <input name="couverture" type="url" value="${v(pre.couverture)}" placeholder="https://…"></label>
-      </div>
+        <div class="cover-tools">
+          <span class="field-label">Couverture</span>
+          <div class="row-actions">
+            <label class="btn btn-ghost btn-file">${icon("camera")}Prendre une photo
+              <input type="file" accept="image/*" capture="environment" data-photo></label>
+            <label class="btn btn-ghost btn-file">${icon("image")}Choisir une image
+              <input type="file" accept="image/*" data-photo></label>
+          </div>
+          <button class="link-btn ${pre.couverture ? "" : "hidden"}" type="button" data-cover-remove>Retirer la couverture</button>
+          <details ${pre.couverture && !isDataUrl(pre.couverture) ? "open" : ""}>
+            <summary>Ou une adresse d’image</summary>
+            <input name="couverture" type="url" value="${isDataUrl(pre.couverture) ? "" : v(pre.couverture)}" placeholder="https://…" aria-label="Adresse de l’image de couverture">
+          </details>
+          <p class="hint" data-cover-msg aria-live="polite"></p>
+        </div>
+      </section>
 
       <label class="field"><span>Titre de l’album</span>
         <input name="titre" value="${v(pre.titre)}" autocomplete="off"></label>
@@ -79,9 +93,12 @@ export async function render(ctx) {
         <div class="seg">${ETATS.map((e) => `<label><input type="radio" name="etat" value="${e.key}" ${pre.etat === e.key ? "checked" : ""}><span>${esc(e.short === "—" ? "?" : e.short)}</span></label>`).join("")}</div>
       </fieldset>
 
+      <fieldset class="field">
+        <legend>Cote</legend>
+        <div class="seg">${COTES.map((c) => `<label><input type="radio" name="cote" value="${c.key}" ${Number(pre.cote) === c.key ? "checked" : ""}><span>${esc(c.short === "Non" ? "Pas coté" : c.short)}</span></label>`).join("")}</div>
+      </fieldset>
+
       <div class="cols-2">
-        <label class="field"><span>Cote (€)</span><input name="cote" inputmode="decimal" value="${v(pre.cote)}"></label>
-        <label class="field"><span>Prix d’achat (€)</span><input name="prixAchat" inputmode="decimal" value="${v(pre.prixAchat)}"></label>
         <label class="field"><span>Date d’achat</span><input name="dateAchat" type="date" value="${v(pre.dateAchat || (bd ? "" : todayIso()))}"></label>
         <label class="check"><input type="checkbox" name="eo" ${pre.eo ? "checked" : ""}><span>Édition originale</span></label>
       </div>
@@ -100,8 +117,39 @@ export async function render(ctx) {
   const f = form.elements;
   const msg = ctx.el.querySelector("[data-isbn-msg]");
   const coverBox = ctx.el.querySelector("[data-cover]");
-  const refreshCover = () => { coverBox.innerHTML = coverHtml({ couverture: f.couverture.value, titre: f.titre.value, collectionName: f.collectionName.value }, "cover-md"); };
-  f.couverture.addEventListener("change", refreshCover);
+  // Couverture : photo du téléphone, adresse d'image, ou celle déjà enregistrée.
+  const cover = { photo: null, removed: false, kept: isDataUrl(pre.couverture) ? pre.couverture : "" };
+  const coverMsg = ctx.el.querySelector("[data-cover-msg]");
+  const removeBtn = ctx.el.querySelector("[data-cover-remove]");
+  const currentCover = () => cover.photo?.thumb || f.couverture.value.trim() || (cover.removed ? "" : cover.kept);
+  const refreshCover = () => {
+    const c = currentCover();
+    coverBox.innerHTML = coverHtml({ couverture: c, titre: f.titre.value, collectionName: f.collectionName.value }, "cover-md");
+    removeBtn.classList.toggle("hidden", !c);
+  };
+  f.couverture.addEventListener("change", () => { if (f.couverture.value.trim()) { cover.photo = null; } refreshCover(); });
+  ctx.el.querySelectorAll("[data-photo]").forEach((inp) => inp.addEventListener("change", async () => {
+    const file = inp.files[0];
+    inp.value = "";
+    if (!file) return;
+    coverMsg.textContent = "Préparation de la photo…";
+    try {
+      cover.photo = await makeCoverPhoto(file);
+      cover.removed = false;
+      f.couverture.value = "";
+      coverMsg.textContent = "Photo prête. Elle sera enregistrée avec l’album.";
+      refreshCover();
+    } catch (err) {
+      coverMsg.textContent = err.message;
+    }
+  }));
+  removeBtn.onclick = () => {
+    cover.photo = null;
+    cover.removed = true;
+    f.couverture.value = "";
+    coverMsg.textContent = "";
+    refreshCover();
+  };
 
   // Autocomplétion : quelques documents lus à la fois, jamais la liste entière.
   const fillList = (input, listId, kind) => {
@@ -140,6 +188,10 @@ export async function render(ctx) {
     const keys = ["titre", "collectionName", "numero", "publisherName", "scenariste", "dessinateur", "auteurs", "annee", "pages", "couverture", "resume"];
     let n = 0;
     for (const k of keys) {
+      if (k === "couverture") {
+        if (info.couverture && !currentCover()) { f.couverture.value = info.couverture; n++; }
+        continue;
+      }
       if (info[k] && !String(f[k].value).trim()) { f[k].value = info[k]; n++; }
     }
     refreshCover();
@@ -162,8 +214,10 @@ export async function render(ctx) {
       isbn: f.isbn.value, titre: f.titre.value, collectionName: f.collectionName.value, numero: f.numero.value,
       publisherName: f.publisherName.value, scenariste: f.scenariste.value, dessinateur: f.dessinateur.value,
       coloriste: f.coloriste.value, auteurs: f.auteurs.value, annee: f.annee.value, pages: f.pages.value,
-      couverture: f.couverture.value, resume: f.resume.value, etat: form.querySelector("[name=etat]:checked")?.value || "nc",
-      cote: parseNumber(f.cote.value), prixAchat: parseNumber(f.prixAchat.value), dateAchat: f.dateAchat.value || null,
+      couverture: f.couverture.value.trim() || (cover.removed ? "" : cover.kept),
+      hasCoverPhoto: !f.couverture.value.trim() && !cover.removed && !!cover.kept,
+      resume: f.resume.value, etat: form.querySelector("[name=etat]:checked")?.value || "nc",
+      cote: Number(form.querySelector("[name=cote]:checked")?.value || 0), dateAchat: f.dateAchat.value || null,
       eo: f.eo.checked, notes: f.notes.value
     };
     if (!data.titre.trim() && !data.collectionName.trim()) {
@@ -176,7 +230,8 @@ export async function render(ctx) {
     }
     form.querySelectorAll("button[type=submit]").forEach((b) => (b.disabled = true));
     try {
-      const newId = await saveBd(ctx.uid, data, bd);
+      const photo = cover.photo || (cover.removed && bd?.hasCoverPhoto ? "remove" : null);
+      const newId = await saveBd(ctx.uid, data, bd, { photo });
       toast(bd ? "Album enregistré" : "Album ajouté");
       if (go === "next") {
         const qs = new URLSearchParams({ scan: "1" });

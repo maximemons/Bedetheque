@@ -11,6 +11,15 @@ export const ETAT_KEYS = ETATS.map((e) => e.key);
 export const etatLabel = (k) => (ETATS.find((e) => e.key === k) || ETATS[ETATS.length - 1]).label;
 export const etatShort = (k) => (ETATS.find((e) => e.key === k) || ETATS[ETATS.length - 1]).short;
 
+// Cote d'un album : un niveau, sans montant. Stockée en nombre (0 à 3) pour pouvoir trier.
+export const COTES = [
+  { key: 0, label: "Pas coté", short: "Non" },
+  { key: 1, label: "Faiblement coté", short: "Faible" },
+  { key: 2, label: "Moyennement coté", short: "Moyenne" },
+  { key: 3, label: "Fortement coté", short: "Forte" }
+];
+export const coteLabel = (n) => (COTES.find((c) => c.key === n) || COTES[0]).label;
+
 // Tris de la liste des BD. Chaque tri correspond à un champ indexé (voir firestore.indexes.json).
 export const BD_SORTS = [
   { key: "serie", field: "seriesSort", label: "Série et tome", dir: "asc" },
@@ -38,7 +47,7 @@ export const HOME_WIDGETS = [
   { id: "lastPurchases", label: "Derniers achats" },
   { id: "lastAdded", label: "Derniers ajouts" },
   { id: "inProgress", label: "Collections à compléter" },
-  { id: "value", label: "Cote totale et dépenses" },
+  { id: "cotes", label: "Répartition par cote" },
   { id: "states", label: "Répartition par état" }
 ];
 export const DEFAULT_HOME = {
@@ -60,8 +69,7 @@ export const IMPORT_FIELDS = [
   { key: "annee", label: "Année de parution", aliases: ["annee", "year", "parution", "date parution", "date de parution", "depot legal", "dl", "date publication"] },
   { key: "pages", label: "Pages", aliases: ["pages", "nb pages", "nombre de pages", "pagination"] },
   { key: "etat", label: "État", aliases: ["etat", "condition", "etat album"] },
-  { key: "cote", label: "Cote (€)", aliases: ["cote", "valeur", "estimation", "cote bdm", "cote argus"] },
-  { key: "prixAchat", label: "Prix d’achat (€)", aliases: ["prix", "prix achat", "prix d achat", "prix paye", "achete pour"] },
+  { key: "cote", label: "Cote (pas coté, faible, moyenne, forte)", aliases: ["cote", "niveau de cote", "cotation", "rarete"] },
   { key: "dateAchat", label: "Date d’achat", aliases: ["date achat", "date d achat", "achat", "achete le", "date d acquisition", "acquis le"] },
   { key: "eo", label: "Édition originale", aliases: ["eo", "edition originale", "originale"] },
   { key: "couverture", label: "Couverture (URL)", aliases: ["couverture", "cover", "image", "url couverture", "image url"] },

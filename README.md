@@ -6,13 +6,14 @@ Une bédéthèque personnelle, pensée pour le téléphone : albums, collections
 
 **Albums (BD)**
 - Ajout à la main ou par **scan du code-barres** (caméra du téléphone). L’ISBN remplit tout seul titre, série, tome, éditeur, auteurs, année, pages, couverture et résumé, depuis **Google Books** et **Open Library** (sources ouvertes, sans clé). Les champs déjà saisis ne sont jamais écrasés.
-- Chaque album a un **état** (Neuf, Très bon état, Bon état, État correct, Abîmé), une **cote**, un prix et une date d’achat, une case « édition originale », des notes.
+- Chaque album a un **état** (Neuf, Très bon état, Bon état, État correct, Abîmé), une **cote** en niveaux (pas coté, faiblement, moyennement, fortement coté), une date d’achat, une case « édition originale », des notes. Le site n’affiche aucun montant.
+- **Couverture** : trouvée automatiquement depuis l’ISBN, ou **prise en photo avec le téléphone** (ou choisie dans la galerie), ou donnée par une adresse d’image.
 - Bouton **Ajouter et scanner le suivant** : enchaîne les tomes d’une même série (collection et numéro suivant pré-remplis).
 - Avertissement si l’ISBN est déjà dans la bédéthèque (on peut quand même ajouter un deuxième exemplaire).
 
 **Recherche et tri**
 - Une seule barre cherche dans le titre, la série, l’éditeur, les auteurs, l’année et l’ISBN (début de mot : « ast gaul » trouve « Astérix le Gaulois »). Le bouton de scan cherche par code-barres.
-- Tri par série et tome, titre, date d’ajout, date d’achat, année, cote ; filtre par état, collection, éditeur ; affichage en couvertures ou en liste.
+- Tri par série et tome, titre, date d’ajout, date d’achat, année, cote ; filtre par état, cote, collection, éditeur ; affichage en couvertures ou en liste.
 
 **Collections**
 - Nombre de tomes de la série et nombre possédé, avec une **planche de cases** (une case par tome, pleine si on l’a) et la liste des **manquants**. Un appui sur une case vide ajoute ce tome.
@@ -21,7 +22,7 @@ Une bédéthèque personnelle, pensée pour le téléphone : albums, collections
 **Éditeurs**
 - Nombre de collections chez chaque éditeur, liste de ses collections, accès à tous ses albums.
 
-**Accueil réglable** (Mon compte › Page d’accueil) : chiffres clés, derniers achats, derniers ajouts, collections à compléter, cote totale et dépenses, répartition par état. On choisit les blocs, leur ordre et le nombre d’albums affichés.
+**Accueil réglable** (Mon compte › Page d’accueil) : chiffres clés, derniers achats, derniers ajouts, collections à compléter, répartition par cote, répartition par état. On choisit les blocs, leur ordre et le nombre d’albums affichés.
 
 **Partage en lecture seule** (Mon compte › Partage) : un lien `…/#/p/<identifiant>` montre la bédéthèque sans permettre de la modifier, même à quelqu’un sans compte. Le partage se coupe d’un clic.
 
@@ -41,10 +42,10 @@ Rien n’est jamais chargé en entier :
 
 ## Import CSV de masse
 
-Mon compte › Données › **Importer un fichier CSV** (ou `#/import`).
+Mon compte › Données (en bas de la page) › **Importer un fichier CSV**.
 
 1. **Fichier** : CSV avec une ligne d’en-tête, séparateur `;` ou `,` détecté tout seul. Choisir « Windows » si les accents sortent mal (vieux exports Excel). Un modèle est téléchargeable dans la page, et `exemple-import.csv` est fourni.
-2. **Colonnes** : reconnues automatiquement (ISBN, Titre, Série, Tome, Éditeur, Scénariste, Dessinateur, Coloriste, Auteurs, Année, Pages, État, Cote, Prix d’achat, Date d’achat, EO, Couverture, Notes, Nb tomes), corrigeables une à une. Si seule une colonne « Titre » du type « Astérix - Tome 12 - … » existe, série et tome en sont extraits.
+2. **Colonnes** : reconnues automatiquement (ISBN, Titre, Série, Tome, Éditeur, Scénariste, Dessinateur, Coloriste, Auteurs, Année, Pages, État, Cote, Date d’achat, EO, Couverture, Notes, Nb tomes), corrigeables une à une. La cote s’écrit en toutes lettres (« pas coté », « faiblement », « moyennement », « fortement coté ») ou de 0 à 3. Si seule une colonne « Titre » du type « Astérix - Tome 12 - … » existe, série et tome en sont extraits.
 3. **Ligne de départ et ligne d’arrivée** : numéros de ligne du fichier, l’en-tête étant la ligne 1. Raccourcis 1 000 / 5 000 / 15 000 lignes. L’estimation des écritures s’affiche avant de lancer.
 
 Pendant l’import :
@@ -54,7 +55,7 @@ Pendant l’import :
 - si Firestore refuse ou ne confirme plus (quota du jour atteint), l’import s’arrête proprement et indique la ligne de reprise ;
 - l’écran reste allumé si le navigateur le permet ; le bouton **Arrêter après ce lot** met en pause.
 
-**Quota** : l’offre gratuite Spark permet **20 000 écritures et 50 000 lectures par jour**. Un import coûte environ 1 écriture par album (+ ~10 par lot pour les collections, éditeurs et compteurs). Pour 30 000 lignes : par exemple lignes 2 à 15 001 le premier jour, 15 002 à 30 001 le lendemain. Sur l’offre Blaze, pas de limite quotidienne (facturation à l’usage, quelques centimes pour 30 000 albums).
+**Quota** : l’offre gratuite Spark permet **20 000 écritures et 50 000 lectures par jour**. Un import coûte environ 1 écriture par album (+ ~10 par lot pour les collections, éditeurs et compteurs). Pour 30 000 lignes : par exemple lignes 2 à 15 001 le premier jour, 15 002 à 30 001 le lendemain. Sur l’offre Blaze, il n’y a pas de limite quotidienne.
 
 L’option « Compléter les infos manquantes depuis l’ISBN » interroge Google Books et Open Library pour chaque ligne (environ 1 seconde par album) : à réserver aux petits lots.
 
@@ -75,7 +76,7 @@ Projet : `bedetheque-706f1` (déjà renseigné dans `js/firebase-config.js` et `
    firebase deploy --only firestore
    ```
 
-   Sans la CLI : copier `firestore.rules` dans Console › Firestore › Règles. Pour les index, l’appli affiche un lien « Créer l’index » la première fois qu’une recherche en a besoin (création en quelques minutes) ; la CLI les crée tous d’un coup (54 index composites).
+   Sans la CLI : copier `firestore.rules` dans Console › Firestore › Règles. Pour les index, l’appli affiche un lien « Créer l’index » la première fois qu’une recherche en a besoin (création en quelques minutes) ; la CLI les crée tous d’un coup (64 index composites), et exclut de l’indexation les champs d’image.
 5. Conseillé : dans Google Cloud › API et services › Identifiants, **restreindre la clé API** aux référents `https://monpseudo.github.io/*` et `https://bedetheque-706f1.firebaseapp.com/*`. La clé d’une app web Firebase n’est pas un secret, la protection des données repose sur les règles Firestore, mais la restriction limite les abus.
 
 ## Héberger sur GitHub Pages
@@ -92,8 +93,15 @@ Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting
 
 - Chaque compte ne lit et n’écrit que ses propres données (`firestore.rules`).
 - Aucune donnée d’identité (e-mail, nom) n’est enregistrée dans Firestore : le document `users/{uid}` ne contient que le réglage du partage, le nom affiché choisi par l’utilisateur et les réglages de l’accueil.
-- Quand le partage est actif, **tous les champs des albums sont lisibles** par les visiteurs, y compris cotes, prix, dates d’achat et notes. Ne pas mettre d’informations personnelles dans les notes d’une bédéthèque partagée.
+- Quand le partage est actif, **tous les champs des albums sont lisibles** par les visiteurs, y compris cotes, dates d’achat, photos et notes. Ne pas mettre d’informations personnelles dans les notes d’une bédéthèque partagée.
 - Les recherches ISBN partent directement du navigateur vers Google Books et Open Library (seul l’ISBN est envoyé).
+
+## Photos de couverture
+
+- Sur la fiche d’ajout ou de modification : **Prendre une photo** ouvre l’appareil photo, **Choisir une image** ouvre la galerie.
+- La photo est réduite et compressée sur le téléphone avant l’envoi, en deux versions : une vignette (environ 25 Ko) dans l’album, pour que les listes restent rapides, et une version nette (environ 200 Ko au plus) dans `users/{uid}/covers/{id}`, lue seulement à l’ouverture de la fiche.
+- Tout est stocké dans Firestore : pas besoin de Firebase Storage, qui exige l’offre Blaze sur les nouveaux projets. Une photo compte comme une écriture de plus.
+- Une photo remplace la couverture trouvée par ISBN ; « Retirer la couverture » la supprime.
 
 ## Scan du code-barres
 
@@ -112,6 +120,7 @@ js/app.js                  routeur, écran de connexion ou appli, mode partage
 js/auth.js                 connexion Google, e-mail/mot de passe, lien e-mail
 js/db.js                   accès aux données : listes paginées, compteurs, import, recalcul
 js/isbn.js                 validation ISBN, recherche Google Books / Open Library
+js/image.js                compression des photos de couverture
 js/scanner.js              scan du code-barres (natif ou html5-qrcode)
 js/components.js           couvertures, lignes, planche des tomes, pagination
 js/ui.js                   icônes, messages, boîtes de dialogue
@@ -137,13 +146,14 @@ exemple-import.csv         fichier d'exemple pour l'import
 
 ```
 users/{uid}                    shareEnabled, shareName, home { widgets[], recentCount }
-users/{uid}/meta/stats         bdCount, collectionCount, publisherCount, coteCents, achatCents, etat { neuf, tbe, be, ec, mauvais, nc }
+users/{uid}/meta/stats         bdCount, collectionCount, publisherCount, etat { neuf, tbe, be, ec, mauvais, nc }, cote { 0, 1, 2, 3 }
 users/{uid}/bds/{id}           isbn, titre, collectionId, collectionName, numero, publisherId, publisherName,
-                               scenariste, dessinateur, coloriste, auteurs, annee, pages, couverture, resume,
-                               etat, cote, prixAchat, dateAchat (AAAA-MM-JJ), eo, notes,
+                               scenariste, dessinateur, coloriste, auteurs, annee, pages, couverture, hasCoverPhoto, resume,
+                               etat, cote (0 pas coté … 3 fortement coté), dateAchat (AAAA-MM-JJ), eo, notes,
                                titleLower, seriesSort, keywords[], createdAt, updatedAt
 users/{uid}/collections/{id}   name, nameLower, publisherId, publisherName, totalVolumes, ownedCount, notes, keywords[]
 users/{uid}/publishers/{id}    name, nameLower, collectionCount, notes, keywords[]
+users/{uid}/covers/{bdId}      data (photo de couverture en grand, JPEG)
 ```
 
 Les champs triables existent toujours (éventuellement à `null`), sinon Firestore exclurait l’album des tris.
@@ -152,7 +162,7 @@ Les champs triables existent toujours (éventuellement à `null`), sinon Firesto
 
 ```
 #/                      accueil
-#/bds?q=&sort=&dir=&etat=&col=&pub=    albums
+#/bds?q=&sort=&dir=&etat=&cote=&col=&pub=    albums
 #/bd/new?isbn=&col=&num=&scan=1        ajout
 #/bd/<id>  #/bd/<id>/edit
 #/collections  #/collection/<id>  #/collection/new  #/collection/<id>/edit

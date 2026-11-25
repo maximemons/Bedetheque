@@ -1,6 +1,6 @@
 import { importChunk, CommitTimeout } from "../db.js";
-import { IMPORT_FIELDS, FREE_WRITES_PER_DAY } from "../constants.js";
-import { esc, normalize, parseNumber, parseIntSafe, parseYear, parseDate, parseBool, fmtInt, sleep } from "../utils.js";
+import { IMPORT_FIELDS, FREE_WRITES_PER_DAY, COTES } from "../constants.js";
+import { esc, normalize, parseCote, parseIntSafe, parseYear, parseDate, parseBool, fmtInt, sleep } from "../utils.js";
 import { normalizeIsbn, isValidIsbn, lookupIsbn, parseSeriesTitle } from "../isbn.js";
 import { icon, toast } from "../ui.js";
 
@@ -77,7 +77,7 @@ function mapRow(row, mapping) {
       publisherName: g("editeur"), scenariste: g("scenariste"), dessinateur: g("dessinateur"),
       coloriste: g("coloriste"), auteurs: g("auteurs"),
       annee: parseYear(g("annee")), pages: parseIntSafe(g("pages")),
-      etat: parseEtat(g("etat")), cote: parseNumber(g("cote")), prixAchat: parseNumber(g("prixAchat")),
+      etat: parseEtat(g("etat")), cote: parseCote(g("cote")),
       dateAchat: parseDate(g("dateAchat")), eo: parseBool(g("eo")),
       couverture: /^https?:\/\//i.test(cover) ? cover : "", notes
     },
@@ -87,10 +87,10 @@ function mapRow(row, mapping) {
 }
 
 function templateCsv() {
-  const head = ["ISBN", "Titre", "Série", "Tome", "Éditeur", "Scénariste", "Dessinateur", "Année", "État", "Cote", "Prix d'achat", "Date d'achat", "EO", "Nb tomes", "Notes"];
+  const head = ["ISBN", "Titre", "Série", "Tome", "Éditeur", "Scénariste", "Dessinateur", "Année", "État", "Cote", "Date d'achat", "EO", "Nb tomes", "Notes"];
   const rows = [
-    ["9782205049657", "Le Secret de l'Espadon", "Blake et Mortimer", "1", "Blake et Mortimer", "Edgar P. Jacobs", "Edgar P. Jacobs", "1950", "Bon état", "12", "9,50", "14/03/2024", "non", "30", ""],
-    ["", "Astérix le Gaulois", "Astérix", "1", "Hachette", "René Goscinny", "Albert Uderzo", "1961", "TBE", "", "", "2023-12-25", "", "40", "Cadeau"]
+    ["9782205049657", "Le Secret de l'Espadon", "Blake et Mortimer", "1", "Blake et Mortimer", "Edgar P. Jacobs", "Edgar P. Jacobs", "1950", "Bon état", "Moyennement coté", "14/03/2024", "non", "30", ""],
+    ["", "Astérix le Gaulois", "Astérix", "1", "Hachette", "René Goscinny", "Albert Uderzo", "1961", "TBE", "Pas coté", "2023-12-25", "", "40", "Cadeau"]
   ];
   return "\uFEFF" + [head, ...rows].map((r) => r.map((c) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(";")).join("\r\n");
 }
@@ -243,8 +243,8 @@ export async function render(ctx) {
     const sample = st.rows.slice(a - 2, a + 1).map((r, i) => ({ line: a + i, ...mapRow(r, st.mapping) }));
     $q("[data-preview]").innerHTML = hasKey ? `<div class="table-wrap"><table class="preview">
       <caption>Aperçu</caption>
-      <thead><tr><th>Ligne</th><th>Titre</th><th>Série</th><th>Tome</th><th>Éditeur</th><th>ISBN</th><th>État</th></tr></thead>
-      <tbody>${sample.map((s) => `<tr><td>${s.line}</td><td>${esc(s.bd.titre)}</td><td>${esc(s.bd.collectionName)}</td><td>${esc(s.bd.numero ?? "")}</td><td>${esc(s.bd.publisherName)}</td><td>${esc(s.bd.isbn || s.badIsbn)}</td><td>${esc(s.bd.etat)}</td></tr>`).join("")}</tbody>
+      <thead><tr><th>Ligne</th><th>Titre</th><th>Série</th><th>Tome</th><th>Éditeur</th><th>ISBN</th><th>État</th><th>Cote</th></tr></thead>
+      <tbody>${sample.map((s) => `<tr><td>${s.line}</td><td>${esc(s.bd.titre)}</td><td>${esc(s.bd.collectionName)}</td><td>${esc(s.bd.numero ?? "")}</td><td>${esc(s.bd.publisherName)}</td><td>${esc(s.bd.isbn || s.badIsbn)}</td><td>${esc(s.bd.etat)}</td><td>${esc(COTES[s.bd.cote]?.label || "")}</td></tr>`).join("")}</tbody>
       </table></div>` : `<p class="form-error">Associez au moins la colonne du titre, de la série ou de l’ISBN.</p>`;
   }
   startIn.oninput = update;

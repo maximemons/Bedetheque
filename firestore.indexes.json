@@ -677,6 +677,146 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seriesSort",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seriesSort",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "titleLower",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "titleLower",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateAchat",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateAchat",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "annee",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cote",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "annee",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "collectionId",
           "order": "ASCENDING"
         },
@@ -757,5 +897,21 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "covers",
+      "fieldPath": "data",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bds",
+      "fieldPath": "couverture",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bds",
+      "fieldPath": "resume",
+      "indexes": []
+    }
+  ]
 }

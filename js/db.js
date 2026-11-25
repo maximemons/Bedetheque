@@ -1,10 +1,10 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query, where, orderBy, limit,
-  startAfter, increment, serverTimestamp, documentId, getCountFromServer, getAggregateFromServer, sum
+  startAfter, increment, serverTimestamp, documentId, getCountFromServer
 } from "./fs.js";
 import {
-  normalize, buildKeywords, buildNameKeywords, searchTokens, seriesSortKey, toCents, chunk, hashStr, sleep
+  normalize, buildKeywords, buildNameKeywords, searchTokens, seriesSortKey, chunk, hashStr, sleep
 } from "./utils.js";
 import { normalizeIsbn } from "./isbn.js";
 import { BD_SORTS, COLLECTION_SORTS, PUBLISHER_SORTS, ETAT_KEYS, DEFAULT_HOME } from "./constants.js";
@@ -12,10 +12,11 @@ import { BD_SORTS, COLLECTION_SORTS, PUBLISHER_SORTS, ETAT_KEYS, DEFAULT_HOME } 
 /*
  * Modèle Firestore (tout est rangé sous users/{uid}) :
  *   users/{uid}                    shareEnabled, shareName, home (réglages de l'accueil)
- *   users/{uid}/meta/stats         compteurs globaux (BD, collections, éditeurs, cote, états…)
+ *   users/{uid}/meta/stats         compteurs globaux (BD, collections, éditeurs, par état, par cote)
  *   users/{uid}/bds/{id}           albums
  *   users/{uid}/collections/{id}   séries : nom, éditeur, nombre de tomes, nombre possédé
  *   users/{uid}/publishers/{id}    éditeurs : nom, nombre de collections
+ *   users/{uid}/covers/{bdId}      photo de couverture en grand (prise avec le téléphone)
  *
  * Avec des dizaines de milliers d'albums, rien n'est jamais chargé en entier :
  * les listes sont paginées, les compteurs sont tenus à jour par incréments,
@@ -49,7 +50,7 @@ export async function ensureUser(uid) {
   }
   const st = await getDoc(statsRef(uid));
   if (!st.exists()) {
-    await setDoc(statsRef(uid), { bdCount: 0, collectionCount: 0, publisherCount: 0, coteCents: 0, achatCents: 0, etat: {} });
+    await setDoc(statsRef(uid), { bdCount: 0, collectionCount: 0, publisherCount: 0, etat: {}, cote: {} });
   }
 }
 
@@ -64,14 +65,16 @@ export async function updateUserDoc(uid, data) {
 
 export async function getStats(uid) {
   const s = await getDoc(statsRef(uid));
-  return { bdCount: 0, collectionCount: 0, publisherCount: 0, coteCents: 0, achatCents: 0, etat: {}, ...(s.exists() ? s.data() : {}) };
+  return { bdCount: 0, collectionCount: 0, publisherCount: 0, etat: {}, cote: {}, ...(s.exists() ? s.data() : {}) };
 }
+
+const MAP_STATS = ["etat", "cote"];
 
 function addStats(target, delta) {
   for (const [k, v] of Object.entries(delta)) {
-    if (k === "etat") {
-      target.etat = target.etat || {};
-      for (const [e, n] of Object.entries(v)) target.etat[e] = (target.etat[e] || 0) + n;
+    if (MAP_STATS.includes(k)) {
+      target[k] = target[k] || {};
+      for (const [e, n] of Object.entries(v)) target[k][e] = (target[k][e] || 0) + n;
     } else target[k] = (target[k] || 0) + v;
   }
 }
@@ -79,10 +82,10 @@ function addStats(target, delta) {
 function statsWrite(delta) {
   const out = { updatedAt: serverTimestamp() };
   for (const [k, v] of Object.entries(delta)) {
-    if (k === "etat") {
+    if (MAP_STATS.includes(k)) {
       const e = {};
       for (const [key, n] of Object.entries(v)) if (n) e[key] = increment(n);
-      if (Object.keys(e).length) out.etat = e;
+      if (Object.keys(e).length) out[k] = e;
     } else if (v) out[k] = increment(v);
   }
   return out;
@@ -91,15 +94,20 @@ function statsWrite(delta) {
 function bdStatsDelta(bd, sign) {
   return {
     bdCount: sign,
-    coteCents: sign * toCents(bd.cote),
-    achatCents: sign * toCents(bd.prixAchat),
-    etat: { [bd.etat || "nc"]: sign }
+    etat: { [bd.etat || "nc"]: sign },
+    cote: { [String(normCote(bd.cote))]: sign }
   };
+}
+
+/** 0 = pas coté … 3 = fortement coté */
+function normCote(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 3 ? n : 0;
 }
 
 // ---------------------------------------------------------------- BD : normalisation
 
-const NUM_FIELDS = ["numero", "annee", "pages", "cote", "prixAchat"];
+const NUM_FIELDS = ["numero", "annee", "pages"];
 const TEXT_FIELDS = ["titre", "collectionName", "publisherName", "scenariste", "dessinateur", "coloriste", "auteurs", "couverture", "resume", "notes"];
 
 /** Document BD complet : tous les champs triables existent toujours (sinon Firestore exclut le document du tri). */
@@ -112,8 +120,10 @@ export function finalizeBd(input) {
   }
   bd.isbn = input.isbn ? normalizeIsbn(input.isbn) : "";
   bd.etat = ETAT_KEYS.includes(input.etat) ? input.etat : "nc";
+  bd.cote = normCote(input.cote);
   bd.dateAchat = input.dateAchat || null;
   bd.eo = !!input.eo;
+  bd.hasCoverPhoto = !!input.hasCoverPhoto && bd.couverture.startsWith("data:image/");
   bd.collectionId = input.collectionId || null;
   bd.publisherId = input.publisherId || null;
   if (!bd.titre && bd.collectionName) bd.titre = bd.numero ? `${bd.collectionName}, tome ${bd.numero}` : bd.collectionName;
@@ -162,20 +172,26 @@ export async function getBd(uid, id) {
  * Page de BD. Un seul filtre part au serveur (le plus sélectif), les autres
  * sont appliqués ici ; on enchaîne quelques pages pour remplir l'écran.
  */
-export async function listBds(uid, { q = "", collectionId = null, publisherId = null, etat = "", sort = "serie", dir = null, cursor = null, pageSize = PAGE_SIZE } = {}) {
-  const s = BD_SORTS.find((x) => x.key === sort) || BD_SORTS[0];
+export async function listBds(uid, { q = "", collectionId = null, publisherId = null, etat = "", cote = null, sort = "serie", dir = null, cursor = null, pageSize = PAGE_SIZE } = {}) {
+  let s = BD_SORTS.find((x) => x.key === sort) || BD_SORTS[0];
   const d = dir || s.dir;
+  const coteF = cote === null || cote === "" ? null : normCote(cote);
   const tokens = searchTokens(q, normalizeIsbn);
   const server = [];
   if (collectionId) server.push(where("collectionId", "==", collectionId));
   else if (tokens.length) server.push(where("keywords", "array-contains", [...tokens].sort((a, b) => b.length - a.length)[0]));
   else if (publisherId) server.push(where("publisherId", "==", publisherId));
   else if (etat) server.push(where("etat", "==", etat));
+  else if (coteF !== null) {
+    server.push(where("cote", "==", coteF));
+    if (s.field === "cote") s = BD_SORTS[0]; // trier sur le champ filtré n'a pas de sens
+  }
 
   const ok = (bd) =>
     (!collectionId || bd.collectionId === collectionId) &&
     (!publisherId || bd.publisherId === publisherId) &&
     (!etat || bd.etat === etat) &&
+    (coteF === null || bd.cote === coteF) &&
     tokens.every((t) => bd.keywords?.includes(t));
 
   const items = [];
@@ -226,11 +242,18 @@ export async function collectionsToComplete(uid, n) {
 
 // ---------------------------------------------------------------- BD : écriture
 
+/** Version grande de la photo de couverture (null si l'album n'en a pas). */
+export async function getCoverPhoto(uid, bdId) {
+  const s = await getDoc(ref(uid, "covers", bdId));
+  return s.exists() ? s.data().data : null;
+}
+
 /**
  * Crée ou modifie une BD. Crée au passage la collection et l'éditeur s'ils
  * n'existent pas, et tient les compteurs à jour dans le même lot d'écritures.
+ * photo : { thumb, full } pour une nouvelle photo, "remove" pour la retirer, null pour ne rien changer.
  */
-export async function saveBd(uid, input, existing = null) {
+export async function saveBd(uid, input, existing = null, { photo = null } = {}) {
   const now = serverTimestamp();
   const batch = writeBatch(db);
   const delta = {};
@@ -286,6 +309,15 @@ export async function saveBd(uid, input, existing = null) {
     publisherId: pub?.id || null, publisherName: pub?.name || draft.publisherName
   });
   const bdRef = existing ? ref(uid, "bds", existing.id) : doc(coll(uid, "bds"));
+  if (photo && photo !== "remove") {
+    bd.couverture = photo.thumb;
+    bd.hasCoverPhoto = true;
+    batch.set(ref(uid, "covers", bdRef.id), { data: photo.full, updatedAt: now });
+  } else if (existing?.hasCoverPhoto && (photo === "remove" || !bd.hasCoverPhoto)) {
+    batch.delete(ref(uid, "covers", bdRef.id));
+    if (!bd.couverture.startsWith("data:image/")) bd.hasCoverPhoto = false;
+    else { bd.couverture = ""; bd.hasCoverPhoto = false; }
+  }
   batch.set(bdRef, { ...bd, createdAt: existing?.createdAt || now, updatedAt: now });
 
   if (existing) addStats(delta, bdStatsDelta(existing, -1));
@@ -299,6 +331,7 @@ export async function saveBd(uid, input, existing = null) {
 export async function deleteBd(uid, bd) {
   const batch = writeBatch(db);
   batch.delete(ref(uid, "bds", bd.id));
+  if (bd.hasCoverPhoto) batch.delete(ref(uid, "covers", bd.id));
   if (bd.collectionId) batch.update(ref(uid, "collections", bd.collectionId), { ownedCount: increment(-1), updatedAt: serverTimestamp() });
   batch.set(statsRef(uid), statsWrite(bdStatsDelta(bd, -1)), { merge: true });
   await commitSoon(batch);
@@ -416,11 +449,15 @@ export async function deleteCollection(uid, col, onProgress = () => {}) {
   let removed = 0;
   // On relit toujours la première page : les albums déjà supprimés n'y sont plus.
   for (;;) {
-    const snap = await getDocs(query(coll(uid, "bds"), where("collectionId", "==", col.id), limit(400)));
+    const snap = await getDocs(query(coll(uid, "bds"), where("collectionId", "==", col.id), limit(240)));
     if (snap.empty) break;
     const b = writeBatch(db);
     const delta = {};
-    snap.docs.forEach((ds) => { b.delete(ds.ref); addStats(delta, bdStatsDelta(ds.data(), -1)); });
+    snap.docs.forEach((ds) => {
+      b.delete(ds.ref);
+      if (ds.data().hasCoverPhoto) b.delete(ref(uid, "covers", ds.id));
+      addStats(delta, bdStatsDelta(ds.data(), -1));
+    });
     b.set(statsRef(uid), statsWrite(delta), { merge: true });
     await b.commit();
     removed += snap.size;
@@ -652,18 +689,18 @@ export async function importChunk(uid, entries, { timeoutMs = 90000 } = {}) {
 export async function recomputeCounters(uid, onProgress = () => {}) {
   const bds = coll(uid, "bds");
   onProgress("Comptage des albums…");
-  const [nb, nc, np, sums] = await Promise.all([
+  const [nb, nc, np] = await Promise.all([
     getCountFromServer(bds),
     getCountFromServer(coll(uid, "collections")),
-    getCountFromServer(coll(uid, "publishers")),
-    getAggregateFromServer(bds, { cote: sum("cote"), achat: sum("prixAchat") })
+    getCountFromServer(coll(uid, "publishers"))
   ]);
   const etat = {};
   for (const k of ETAT_KEYS) etat[k] = (await getCountFromServer(query(bds, where("etat", "==", k)))).data().count;
+  const cote = {};
+  for (const k of [0, 1, 2, 3]) cote[k] = (await getCountFromServer(query(bds, where("cote", "==", k)))).data().count;
   await setDoc(statsRef(uid), {
     bdCount: nb.data().count, collectionCount: nc.data().count, publisherCount: np.data().count,
-    coteCents: Math.round((sums.data().cote || 0) * 100), achatCents: Math.round((sums.data().achat || 0) * 100),
-    etat, updatedAt: serverTimestamp()
+    etat, cote, updatedAt: serverTimestamp()
   });
 
   let done = 0, fixed = 0;

@@ -1,7 +1,7 @@
 import { listCollections, getCollectionDoc, listBdsOfCollection, saveCollection, deleteCollection, suggest, getPublisher } from "../db.js";
 import { collectionRow, bdRow, casesBoard, missingText, emptyState, createPager, spinner, miniCases } from "../components.js";
 import { COLLECTION_SORTS } from "../constants.js";
-import { esc, debounce, fmtInt, fmtEuro } from "../utils.js";
+import { esc, debounce, fmtInt } from "../utils.js";
 import { icon, confirmDialog, toast, errorHtml } from "../ui.js";
 
 export async function renderList(ctx) {
@@ -87,7 +87,7 @@ export async function renderDetail(ctx) {
     if (Number.isInteger(bd.numero) && bd.numero > 0 && !byNum.has(bd.numero)) byNum.set(bd.numero, bd);
     else others.push(bd);
   }
-  const cote = bds.reduce((a, b) => a + (b.cote || 0), 0);
+  const fortes = bds.filter((b) => b.cote === 3).length;
   const nextMissing = (() => { for (let n = 1; n <= (col.totalVolumes || 0); n++) if (!byNum.has(n)) return n; return null; })();
   if (!ctx.readOnly && nextMissing) ctx.setFab({ label: `Ajouter le tome ${nextMissing}`, href: `bd/new?col=${id}&num=${nextMissing}` });
 
@@ -95,7 +95,7 @@ export async function renderDetail(ctx) {
   body.innerHTML = `
     ${casesBoard(col.totalVolumes, byNum, (bd) => ctx.link(`bd/${bd.id}`), ctx.readOnly ? null : (n) => ctx.link(`bd/new?col=${id}&num=${n}`))}
     ${missingText(col.totalVolumes, byNum)}
-    ${cote ? `<p class="muted">Cote de la collection : ${fmtEuro(cote)}</p>` : ""}
+    ${fortes ? `<p class="muted">${fortes} album${fortes > 1 ? "s" : ""} fortement coté${fortes > 1 ? "s" : ""}.</p>` : ""}
     ${col.notes ? `<p class="prose">${esc(col.notes)}</p>` : ""}
     <h2 class="block-title">${fmtInt(bds.length)} album${bds.length > 1 ? "s" : ""}</h2>
     <div class="list">${bds.map((bd) => bdRow(bd, ctx.link(`bd/${bd.id}`))).join("")}</div>

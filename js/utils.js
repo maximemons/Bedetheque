@@ -83,16 +83,6 @@ export function seriesSortKey(collectionName, numero, titleLower) {
   return normalize(collectionName) + "|" + n + "|" + (titleLower || "");
 }
 
-/** "12,50 €" → 12.5 ; vide → null */
-export function parseNumber(v) {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  const s = String(v).replace(/\s|€|eur/gi, "").replace(",", ".");
-  if (!s) return null;
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 export function parseIntSafe(v) {
   if (v === null || v === undefined || v === "") return null;
   const m = String(v).match(/\d+/);
@@ -102,6 +92,18 @@ export function parseIntSafe(v) {
 export function parseYear(v) {
   const m = String(v ?? "").match(/(1[89]\d\d|20\d\d)/);
   return m ? parseInt(m[1], 10) : null;
+}
+
+/** Niveau de cote depuis un texte libre : « fortement coté », « moyenne », « 2 »… → 0 à 3. */
+export function parseCote(v) {
+  const n = normalize(v);
+  if (!n) return 0;
+  if (/^[0-3]$/.test(n)) return +n;
+  if (/^(pas|non|aucun|aucune|nc|sans)/.test(n) || n.includes("pas cote")) return 0;
+  if (/fort|eleve|haut|rare|tres/.test(n)) return 3;
+  if (/moyen|moderee|modere/.test(n)) return 2;
+  if (/faibl|peu|basse|bas\b|legere/.test(n)) return 1;
+  return 0;
 }
 
 /** Accepte JJ/MM/AAAA, AAAA-MM-JJ, MM/AAAA, AAAA → "AAAA-MM-JJ" (triable). */
@@ -126,11 +128,7 @@ export function parseBool(v) {
   return /^(oui|o|yes|y|1|x|vrai|true|eo)$/i.test(String(v ?? "").trim());
 }
 
-const euroFmt = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
-const euroFmt0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const intFmt = new Intl.NumberFormat("fr-FR");
-export const fmtEuro = (n) => (n === null || n === undefined ? "" : euroFmt.format(n));
-export const fmtEuro0 = (n) => euroFmt0.format(n || 0);
 export const fmtInt = (n) => intFmt.format(n || 0);
 export function fmtDate(iso) {
   if (!iso) return "";
@@ -176,8 +174,4 @@ export function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
-}
-
-export function toCents(n) {
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }

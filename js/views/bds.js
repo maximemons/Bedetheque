@@ -1,7 +1,7 @@
-import { listBds, getBd, deleteBd, getCollectionDoc, getPublisher, findBdByIsbn } from "../db.js";
-import { bdTile, bdRow, coverHtml, etatBadge, emptyState, createPager, spinner } from "../components.js";
-import { BD_SORTS, ETATS, etatLabel } from "../constants.js";
-import { esc, debounce, fmtEuro, fmtDate, fmtInt } from "../utils.js";
+import { listBds, getBd, deleteBd, getCollectionDoc, getPublisher, findBdByIsbn, getCoverPhoto } from "../db.js";
+import { bdTile, bdRow, coverHtml, etatBadge, coteMeter, emptyState, createPager, spinner } from "../components.js";
+import { BD_SORTS, ETATS, COTES, etatLabel, coteLabel } from "../constants.js";
+import { esc, debounce, fmtDate, fmtInt } from "../utils.js";
 import { icon, confirmDialog, toast, errorHtml } from "../ui.js";
 import { formatIsbn } from "../isbn.js";
 import { scanIsbn } from "../scanner.js";
@@ -18,6 +18,7 @@ export async function renderList(ctx) {
     sort: q.get("sort") || "serie",
     dir: q.get("dir") || "",
     etat: q.get("etat") || "",
+    cote: q.get("cote") || "",
     col: q.get("col") || "",
     pub: q.get("pub") || "",
     view: localStorage.getItem(VIEW_KEY) || "grid"
@@ -36,6 +37,8 @@ export async function renderList(ctx) {
         <button class="icon-btn" type="button" data-dir aria-label="Inverser l’ordre">${icon("sort")}</button>
         <label class="select"><span class="sr-only">État</span>
           <select name="etat"><option value="">Tous états</option>${ETATS.map((e) => `<option value="${e.key}" ${e.key === st.etat ? "selected" : ""}>${esc(e.label)}</option>`).join("")}</select></label>
+        <label class="select"><span class="sr-only">Cote</span>
+          <select name="cote"><option value="">Toutes cotes</option>${COTES.map((c) => `<option value="${c.key}" ${String(c.key) === st.cote ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></label>
         <button class="icon-btn" type="button" data-view aria-label="Changer l’affichage">${icon(st.view === "grid" ? "list" : "grid")}</button>
       </div>
       <div class="chips" data-chips></div>
@@ -67,7 +70,7 @@ export async function renderList(ctx) {
 
   function syncHash() {
     const p = new URLSearchParams();
-    for (const k of ["q", "sort", "dir", "etat", "col", "pub"]) if (st[k]) p.set(k, st[k]);
+    for (const k of ["q", "sort", "dir", "etat", "cote", "col", "pub"]) if (st[k] !== "") p.set(k, st[k]);
     const s = p.toString();
     history.replaceState(null, "", ctx.link("bds") + (s ? "?" + s : ""));
   }
@@ -80,10 +83,10 @@ export async function renderList(ctx) {
     const render = st.view === "grid" ? (bd) => bdTile(bd, ctx.link(`bd/${bd.id}`)) : (bd) => bdRow(bd, ctx.link(`bd/${bd.id}`));
     pager = createPager({
       list,
-      fetchPage: (cursor) => listBds(ctx.uid, { q: st.q, sort: st.sort, dir: st.dir || null, etat: st.etat, collectionId: st.col || null, publisherId: st.pub || null, cursor }),
+      fetchPage: (cursor) => listBds(ctx.uid, { q: st.q, sort: st.sort, dir: st.dir || null, etat: st.etat, cote: st.cote, collectionId: st.col || null, publisherId: st.pub || null, cursor }),
       render,
-      onCount: (n, done) => { countEl.textContent = st.q || st.etat || st.col || st.pub ? `${fmtInt(n)}${done ? "" : "+"} résultat${n > 1 ? "s" : ""}` : ""; },
-      empty: () => (st.q || st.etat || st.col || st.pub)
+      onCount: (n, done) => { countEl.textContent = st.q || st.etat || st.cote || st.col || st.pub ? `${fmtInt(n)}${done ? "" : "+"} résultat${n > 1 ? "s" : ""}` : ""; },
+      empty: () => (st.q || st.etat || st.cote || st.col || st.pub)
         ? emptyState("Aucune BD ne correspond", "Vérifiez l’orthographe ou retirez un filtre.", !ctx.readOnly && /^\d{13}$/.test(st.q) ? `<a class="btn btn-primary" href="${ctx.link(`bd/new?isbn=${st.q}`)}">Ajouter l’ISBN ${esc(st.q)}</a>` : "")
         : emptyState("Pas encore de BD", ctx.readOnly ? "" : "Ajoutez votre premier album.", ctx.readOnly ? "" : `<a class="btn btn-primary" href="${ctx.link("bd/new?scan=1")}">Scanner un album</a>`)
     });
@@ -119,6 +122,8 @@ export async function renderList(ctx) {
   };
   const etatSel = ctx.el.querySelector("[name=etat]");
   etatSel.onchange = () => { st.etat = etatSel.value; reload(); };
+  const coteSel = ctx.el.querySelector("[name=cote]");
+  coteSel.onchange = () => { st.cote = coteSel.value; reload(); };
   ctx.el.querySelector("[data-view]").onclick = (e) => {
     st.view = st.view === "grid" ? "list" : "grid";
     localStorage.setItem(VIEW_KEY, st.view);
@@ -162,11 +167,10 @@ export async function renderDetail(ctx) {
       <div class="bd-hero">
         ${coverHtml(bd, "cover-lg")}
         <div class="bd-hero-side">
-          <div class="money">
-            <div><span>Cote</span><strong>${bd.cote != null ? fmtEuro(bd.cote) : "—"}</strong></div>
-            <div><span>Payé</span><strong>${bd.prixAchat != null ? fmtEuro(bd.prixAchat) : "—"}</strong></div>
+          <div class="badges">
+            <div><span class="k">Cote</span><strong>${coteMeter(bd.cote)} ${esc(coteLabel(bd.cote))}</strong></div>
+            <div><span class="k">État</span><strong class="etat-line">${bd.etat && bd.etat !== "nc" ? etatBadge(bd.etat) + esc(etatLabel(bd.etat)) : `<span class="muted">Non renseigné</span>`}</strong></div>
           </div>
-          <div class="etat-line">${bd.etat && bd.etat !== "nc" ? etatBadge(bd.etat) + `<span>${esc(etatLabel(bd.etat))}</span>` : `<span class="muted">État non renseigné</span>`}</div>
           ${bd.dateAchat ? `<p class="muted">Acheté le ${fmtDate(bd.dateAchat)}</p>` : ""}
         </div>
       </div>
@@ -178,6 +182,14 @@ export async function renderDetail(ctx) {
         <button class="btn btn-danger-ghost" type="button" data-del>${icon("trash")}Supprimer</button>
       </div>`}
     </article>`);
+
+  // Photo prise au téléphone : la vignette s'affiche tout de suite, la version nette arrive ensuite.
+  if (bd.hasCoverPhoto) {
+    getCoverPhoto(ctx.uid, bd.id).then((full) => {
+      const img = ctx.el.querySelector(".cover-lg img");
+      if (full && img && ctx.alive()) img.src = full;
+    }).catch(() => {});
+  }
 
   ctx.el.querySelector("[data-del]")?.addEventListener("click", async () => {
     if (!(await confirmDialog(`« ${bd.titre} » sera retiré de votre bédéthèque.`, { title: "Supprimer cet album ?", ok: "Supprimer", danger: true }))) return;

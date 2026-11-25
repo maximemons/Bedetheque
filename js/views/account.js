@@ -42,7 +42,7 @@ export async function render(ctx) {
       <h2>Partage en lecture seule</h2>
       <label class="check"><input type="checkbox" name="shareEnabled" ${profile.shareEnabled ? "checked" : ""}><span>Partager ma bédéthèque avec un lien</span></label>
       <label class="field"><span>Nom affiché aux visiteurs (facultatif)</span><input name="shareName" value="${esc(profile.shareName)}" maxlength="40" placeholder="Ex. Camille"></label>
-      <p class="hint">Toute personne qui a le lien voit vos albums, collections et éditeurs, y compris cotes, prix et notes. Elle ne peut rien modifier. Votre e-mail n’est jamais montré.</p>
+      <p class="hint">Toute personne qui a le lien voit vos albums, collections et éditeurs, y compris l’état, la cote, les photos et les notes. Elle ne peut rien modifier. Votre e-mail n’est jamais montré.</p>
       <div class="share-link ${profile.shareEnabled ? "" : "hidden"}" data-share-link>
         <input readonly value="${esc(shareUrl)}" aria-label="Lien de partage">
         <button class="btn btn-ghost" type="button" data-copy>${icon("link")}Copier</button>

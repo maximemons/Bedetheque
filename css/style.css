@@ -77,19 +77,13 @@ code { font-size: .9em; background: var(--soft); padding: 1px 4px; border-radius
 
 .ico { width: 22px; height: 22px; flex: none; }
 
-/* ---------------------------------------------------------------- Marque */
-.brand-mark { display: inline-flex; gap: 3px; align-items: flex-end; height: 26px; }
-.brand-mark span { width: 8px; border: var(--bw) solid var(--line); border-radius: 2px; }
-.brand-mark span:nth-child(1) { height: 100%; background: var(--blue); }
-.brand-mark span:nth-child(2) { height: 80%; background: var(--yellow); }
-.brand-mark span:nth-child(3) { height: 92%; background: var(--red); transform: rotate(10deg); transform-origin: bottom left; }
-.brand-mark--lg { height: 64px; gap: 6px; }
-.brand-mark--lg span { width: 20px; border-width: 3px; }
+/* ---------------------------------------------------------------- Logo : une bulle « BD » */
+.logo { display: block; width: 40px; height: 40px; }
+.logo-lg { width: 88px; height: 88px; }
 
 .splash { position: fixed; inset: 0; display: grid; place-items: center; background: var(--paper); }
 @media (prefers-reduced-motion: no-preference) {
-  .splash .brand-mark span { animation: lean 1s ease-in-out infinite alternate; }
-  .splash .brand-mark span:nth-child(2) { animation-delay: .15s; }
+  .splash .logo { animation: lean .6s ease-in-out infinite alternate; }
 }
 @keyframes lean { to { transform: translateY(-6px); } }
 
@@ -193,7 +187,8 @@ code { font-size: .9em; background: var(--soft); padding: 1px 4px; border-radius
 .field { display: flex; flex-direction: column; gap: 4px; margin: 0; border: 0; padding: 0; min-width: 0; }
 .field > span, .field > legend { font-size: .88rem; font-weight: 700; color: var(--ink-2); padding: 0; }
 .field.inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
-input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea {
+/* :where() garde une spécificité nulle : les règles ciblées (recherche, filtres…) gagnent toujours. */
+:where(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) {
   width: 100%; min-height: 46px; padding: 10px 12px;
   background: var(--surface); border: var(--bw) solid var(--line); border-radius: var(--r);
 }
@@ -215,7 +210,17 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus); out
 
 .isbn-box { display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--surface); border: var(--bw) solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
 .isbn-box .hint:empty { display: none; }
-.form-cover { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; }
+.form-cover { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start; }
+.cover-tools { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cover-tools .row-actions .btn { flex: 1 1 150px; min-height: 42px; padding: 8px 10px; font-size: .92rem; }
+.cover-tools details summary { cursor: pointer; color: var(--ink-2); font-size: .9rem; padding: 4px 0; }
+.cover-tools details input { margin-top: 6px; }
+.cover-tools .hint:empty { display: none; }
+.cover-tools .link-btn { align-self: flex-start; color: var(--red); }
+.field-label { font-size: .88rem; font-weight: 700; color: var(--ink-2); }
+.btn-file { position: relative; overflow: hidden; }
+.btn-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.btn-file:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .seg { display: flex; flex-wrap: wrap; border: var(--bw) solid var(--line); border-radius: var(--r); overflow: hidden; }
 .seg label { flex: 1 1 auto; }
@@ -301,6 +306,15 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus); out
 .etat-mauvais, .etat-bg-mauvais { background: var(--red); color: #fff; }
 .etat-bg-nc { background: var(--soft); }
 
+/* Cote : de « pas coté » (vide) à « fortement coté » (plein) */
+.cote-meter { display: inline-flex; gap: 3px; vertical-align: middle; }
+.cote-meter i { width: 10px; height: 14px; border: 1.5px solid var(--line); border-radius: 1px; }
+.cote-meter i.on { background: var(--violet); }
+.cote-bg-0 { background: var(--soft); }
+.cote-bg-1 { background: color-mix(in srgb, var(--violet) 35%, var(--surface)); }
+.cote-bg-2 { background: color-mix(in srgb, var(--violet) 65%, var(--surface)); }
+.cote-bg-3 { background: var(--violet); }
+
 /* ---------------------------------------------------------------- Progression en cases */
 .progress { display: flex; align-items: center; gap: 8px; }
 .progress-txt { font-family: var(--f-display); font-weight: 800; font-size: .88rem; white-space: nowrap; }
@@ -343,8 +357,6 @@ a.case:not(.on):hover { background: var(--soft); }
 .count:nth-child(1) { background: var(--yellow); color: #16181D; }
 .count:nth-child(1) span { color: #16181D; }
 
-.value-line { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: var(--bw) solid var(--soft); }
-.value-line strong { font-family: var(--f-display); font-size: 1.3rem; font-stretch: 112%; }
 
 .shelf { display: grid; grid-auto-flow: column; grid-auto-columns: 112px; gap: 14px; overflow-x: auto; padding: 8px 4px 10px 8px; scroll-snap-type: x proximity; }
 .shelf-item { scroll-snap-align: start; display: flex; flex-direction: column; gap: 2px; }
@@ -362,10 +374,10 @@ a.case:not(.on):hover { background: var(--soft); }
 .bd-detail { display: flex; flex-direction: column; gap: 18px; }
 .bd-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .bd-hero-side { display: flex; flex-direction: column; gap: 12px; }
-.money { display: grid; gap: 8px; }
-.money div { padding: 10px 12px; border: var(--bw) solid var(--line); border-radius: var(--r); background: var(--surface); }
-.money span { display: block; font-size: .82rem; color: var(--ink-2); font-weight: 700; }
-.money strong { font-family: var(--f-display); font-size: 1.35rem; font-stretch: 112%; }
+.badges { display: grid; gap: 8px; }
+.badges > div { padding: 10px 12px; border: var(--bw) solid var(--line); border-radius: var(--r); background: var(--surface); }
+.badges span.k { display: block; font-size: .82rem; color: var(--ink-2); font-weight: 700; }
+.badges strong { font-family: var(--f-display); font-size: 1.1rem; font-stretch: 108%; }
 .etat-line { display: flex; align-items: center; gap: 8px; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; padding: 14px; background: var(--surface); border: var(--bw) solid var(--line); border-radius: var(--r); }
 .facts dt { color: var(--ink-2); font-size: .9rem; }

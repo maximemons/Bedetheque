@@ -1,5 +1,5 @@
 import { esc, hashColor, fmtInt, compressRanges } from "./utils.js";
-import { etatShort, etatLabel } from "./constants.js";
+import { etatShort, etatLabel, coteLabel } from "./constants.js";
 import { icon, errorHtml } from "./ui.js";
 
 function initials(s) {
@@ -12,6 +12,12 @@ export function coverHtml(bd, cls = "") {
     ? `<img src="${esc(bd.couverture)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
     : "";
   return `<div class="cover ${cls}">${ph}${img}</div>`;
+}
+
+/** Cote en trois crans : aucun plein = pas coté, trois pleins = fortement coté. */
+export function coteMeter(n) {
+  const v = Number.isInteger(n) ? n : 0;
+  return `<span class="cote-meter" role="img" aria-label="${esc(coteLabel(v))}">${[1, 2, 3].map((i) => `<i class="${i <= v ? "on" : ""}"></i>`).join("")}</span>`;
 }
 
 export function tomeLabel(bd) {
