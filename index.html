@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F3F5F9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14161C" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Ma bédéthèque : mes albums, mes collections et mes éditeurs, avec états, cotes et tomes manquants.">
+  <title>Bédéthèque</title>
+
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="icon" type="image/png" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bédéthèque">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Chargement -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="brand-mark brand-mark--lg"><span></span><span></span><span></span></div>
+  </div>
+
+  <!-- Connexion -->
+  <section id="login-screen" class="login hidden" aria-labelledby="login-title">
+    <div class="login-inner">
+      <div class="brand-mark brand-mark--lg" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h1 id="login-title" class="login-title">Bédéthèque</h1>
+      <p class="login-text">Vos albums, vos séries et ce qu’il vous manque, toujours dans la poche.</p>
+
+      <button id="btn-google" class="btn btn-google" type="button">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5a4.3 4.3 0 0 1-1.9 2.8v2.3h3c1.8-1.6 2.9-4 2.9-6.8z" fill="#4285F4"/><path d="M12 21.5c2.5 0 4.7-.8 6.2-2.3l-3-2.3c-.8.6-1.9.9-3.2.9-2.4 0-4.5-1.6-5.2-3.9H3.7v2.4a9.5 9.5 0 0 0 8.3 5.2z" fill="#34A853"/><path d="M6.8 13.9a5.7 5.7 0 0 1 0-3.7V7.8H3.7a9.5 9.5 0 0 0 0 8.5z" fill="#FBBC05"/><path d="M12 6.4c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.3 9.3 0 0 0 12 2.5 9.5 9.5 0 0 0 3.7 7.8l3.1 2.4C7.5 7.9 9.6 6.4 12 6.4z" fill="#EA4335"/></svg>
+        <span>Continuer avec Google</span>
+      </button>
+
+      <div class="or"><span>ou avec votre e-mail</span></div>
+
+      <form id="login-form" class="login-form" novalidate>
+        <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" required></label>
+        <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="current-password" minlength="6"></label>
+        <button class="btn btn-primary" type="submit">Se connecter</button>
+        <div class="login-links">
+          <button id="btn-link" class="btn btn-ghost" type="button">Recevoir un lien de connexion (sans mot de passe)</button>
+          <button id="btn-signup" class="link-btn" type="button">Créer un compte</button>
+          <button id="btn-reset" class="link-btn" type="button">Mot de passe oublié</button>
+        </div>
+      </form>
+      <p id="login-error" class="login-msg login-error hidden" role="alert"></p>
+      <p id="login-info" class="login-msg login-info hidden" role="status"></p>
+    </div>
+  </section>
+
+  <!-- Application -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <button id="btn-back" class="icon-btn hidden" type="button" aria-label="Retour">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+      </button>
+      <div class="topbar-title">
+        <span id="topbar-kicker" class="topbar-kicker"></span>
+        <h1 id="topbar-title">Bédéthèque</h1>
+      </div>
+      <div id="topbar-actions" class="topbar-actions"></div>
+    </header>
+
+    <div id="share-banner" class="share-banner hidden" role="note"></div>
+
+    <main id="view" class="view" tabindex="-1"></main>
+
+    <button id="fab" class="fab hidden" type="button"></button>
+
+    <nav class="tabbar" aria-label="Navigation principale">
+      <a data-tab="home" data-path=""><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a>
+      <a data-tab="bds" data-path="bds"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="5" height="16" rx="1"/><rect x="9" y="4" width="5" height="16" rx="1"/><path d="M15.2 5.4 19 4.4l3.4 14.4-3.8 1z"/></svg><span>BD</span></a>
+      <a data-tab="collections" data-path="collections"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg><span>Collections</span></a>
+      <a data-tab="editeurs" data-path="editeurs"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg><span>Éditeurs</span></a>
+      <a data-tab="compte" data-path="compte"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Compte</span></a>
+    </nav>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

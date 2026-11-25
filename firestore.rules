@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Chaque compte ne lit et n'écrit que ses propres données.
+// Si le propriétaire active le partage (users/{uid}.shareEnabled == true),
+// tout le monde peut LIRE ses albums, collections, éditeurs et compteurs, sans rien pouvoir modifier.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isShared(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.get('shareEnabled', false) == true;
+    }
+
+    function canRead(uid) {
+      return isOwner(uid) || isShared(uid);
+    }
+
+    match /users/{uid} {
+      // Ce document ne contient que : shareEnabled, shareName, réglages de l'accueil.
+      // Aucun e-mail ni donnée d'identité n'y est stocké.
+      allow read: if isOwner(uid) || resource.data.get('shareEnabled', false) == true;
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['shareEnabled', 'shareName', 'home', 'createdAt'])
+        && request.resource.data.get('shareName', '') is string
+        && request.resource.data.get('shareName', '').size() <= 40;
+      allow delete: if isOwner(uid);
+
+      match /meta/{docId} {
+        allow read: if canRead(uid);
+        allow write: if isOwner(uid);
+      }
+
+      match /bds/{id} {
+        allow read: if canRead(uid);
+        allow write: if isOwner(uid);
+      }
+
+      match /collections/{id} {
+        allow read: if canRead(uid);
+        allow write: if isOwner(uid);
+      }
+
+      match /publishers/{id} {
+        allow read: if canRead(uid);
+        allow write: if isOwner(uid);
+      }
+    }
+  }
+}
