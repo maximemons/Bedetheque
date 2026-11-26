@@ -3,7 +3,7 @@ rules_version = '2';
 // ============================================================================
 // Bédéthèque : plusieurs bédéthèques par personne, membres identifiés par e-mail.
 //
-// Identité : une personne = une adresse e-mail VÉRIFIÉE, quel que soit le moyen de
+// Identité : une personne = une adresse e-mail (sans vérification), quel que soit le moyen de
 // connexion (Google, e-mail + mot de passe, lien e-mail). Deux comptes Firebase
 // différents (uid différents) avec la même adresse voient donc les mêmes bédéthèques.
 // L'adresse n'est jamais stockée : on stocke son empreinte SHA-256 (« clé »),
@@ -29,12 +29,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Une adresse non vérifiée (compte e-mail + mot de passe pas encore confirmé)
-    // ne donne accès à rien : sinon n'importe qui pourrait s'inscrire avec l'adresse d'un autre.
+    // Vérification de l'adresse désactivée : tout compte connecté qui porte une adresse
+    // e-mail est accepté, même si cette adresse n'a pas été confirmée.
+    // (Nom conservé pour ne pas toucher au reste des règles.)
     function verified() {
       return signedIn()
-        && request.auth.token.email is string
-        && request.auth.token.email_verified == true;
+        && request.auth.token.email is string;
     }
 
     // Empreinte de l'adresse e-mail (64 caractères hexadécimaux, minuscules).

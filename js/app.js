@@ -1,6 +1,6 @@
 import { $, $$, esc } from "./utils.js";
 import { icon, errorHtml, toast, promptDialog } from "./ui.js";
-import { onUser, completePendingSignIn, bindLoginScreen, needsVerification, resendVerification, reloadUser, logout, authMessage } from "./auth.js";
+import { onUser, completePendingSignIn, bindLoginScreen } from "./auth.js";
 import {
   emailKey, getAccount, saveAccount, listMyLibraries, getLibrary, createLibrary, getShare,
   findLegacyLibrary, adoptLegacyLibrary, ROLES
@@ -168,16 +168,11 @@ function parseHash() {
 }
 
 function show(id) {
-  for (const s of ["#splash", "#login-screen", "#verify-screen", "#app"]) $(s).classList.toggle("hidden", s !== id);
+  for (const s of ["#splash", "#login-screen", "#app"]) $(s).classList.toggle("hidden", s !== id);
 }
 
 function runCleanups() {
   state.cleanups.splice(0).forEach((fn) => { try { fn(); } catch { /* rien */ } });
-}
-
-function showVerifyScreen(user) {
-  $("#verify-email").textContent = user.email;
-  show("#verify-screen");
 }
 
 async function route() {
@@ -188,7 +183,6 @@ async function route() {
 
   if (!share) {
     if (!state.user) { runCleanups(); show("#login-screen"); return; }
-    if (needsVerification(state.user)) { runCleanups(); showVerifyScreen(state.user); return; }
     if (!state.booted) {
       if (state.bootError) {
         show("#app");
@@ -363,32 +357,11 @@ function openSwitcher() {
 
 // ---------------------------------------------------------------- Démarrage
 
-function bindVerifyScreen() {
-  const err = $("#verify-error"), info = $("#verify-info");
-  const say = (el, text) => { [err, info].forEach((x) => x.classList.add("hidden")); el.textContent = text; el.classList.remove("hidden"); };
-  $("#btn-verified").onclick = async (e) => {
-    e.currentTarget.disabled = true;
-    try {
-      const u = await reloadUser();
-      if (u?.emailVerified) { state.user = u; await boot(u); }
-      else say(err, "L’adresse n’est pas encore vérifiée. Ouvrez le lien reçu par e-mail (pensez aux indésirables).");
-    } catch (x) { say(err, authMessage(x)); }
-    finally { e.currentTarget.disabled = false; }
-  };
-  $("#btn-resend").onclick = async (e) => {
-    e.currentTarget.disabled = true;
-    try { await resendVerification(); say(info, "E-mail renvoyé."); }
-    catch (x) { say(err, authMessage(x)); }
-    finally { e.currentTarget.disabled = false; }
-  };
-  $("#btn-verify-logout").onclick = () => logout();
-}
-
 async function boot(user) {
   state.booted = false;
   state.bootError = null;
   state.navCount = -1;
-  if (user && !needsVerification(user)) {
+  if (user) {
     if (!user.email) {
       state.bootError = new Error("Ce compte n’a pas d’adresse e-mail : impossible de retrouver vos bédéthèques.");
     } else {
@@ -411,7 +384,6 @@ async function boot(user) {
 
 async function start() {
   bindLoginScreen();
-  bindVerifyScreen();
   $("#lib-switch").onclick = openSwitcher;
   window.addEventListener("hashchange", route);
   await completePendingSignIn();

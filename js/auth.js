@@ -2,7 +2,7 @@ import { auth, googleProvider } from "./firebase-config.js";
 import {
   onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail,
-  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendEmailVerification
+  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 import { $ } from "./utils.js";
 import { promptDialog } from "./ui.js";
@@ -30,27 +30,6 @@ export const onUser = (cb) => onAuthStateChanged(auth, cb);
 export const logout = () => signOut(auth);
 
 const appUrl = () => location.origin + location.pathname;
-
-/**
- * Les bédéthèques sont rattachées à une adresse e-mail : elle doit être vérifiée.
- * C'est le cas d'office avec Google et avec le lien de connexion ; avec e-mail + mot de passe,
- * il faut cliquer sur le lien reçu par e-mail.
- */
-export const needsVerification = (user) => !!user && !!user.email && !user.emailVerified;
-
-export async function resendVerification() {
-  if (!auth.currentUser) return;
-  await sendEmailVerification(auth.currentUser, { url: appUrl() });
-}
-
-/** Relit l'état du compte et renouvelle le jeton (les règles lisent « email_verified » dans le jeton). */
-export async function reloadUser() {
-  const u = auth.currentUser;
-  if (!u) return null;
-  await u.reload();
-  await u.getIdToken(true);
-  return auth.currentUser;
-}
 
 export const authMessage = (e) => msgFor(e);
 
@@ -116,8 +95,7 @@ export function bindLoginScreen() {
 
   $("#btn-signup").onclick = (e) => busy(e.currentTarget, async () => {
     if (!email() || !password()) return showError("Saisissez un e-mail et un mot de passe (6 caractères minimum).");
-    const cred = await createUserWithEmailAndPassword(auth, email(), password());
-    await sendEmailVerification(cred.user, { url: appUrl() }).catch((err) => console.warn("Vérification", err));
+    await createUserWithEmailAndPassword(auth, email(), password());
   });
 
   $("#btn-reset").onclick = (e) => busy(e.currentTarget, async () => {

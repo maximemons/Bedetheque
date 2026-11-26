@@ -1,6 +1,6 @@
 // Service worker : l'appli s'ouvre même sans réseau.
 // Les données, elles, viennent du cache local de Firestore.
-const CACHE = "bedetheque-v4";
+const CACHE = "bedetheque-v5";
 const SHELL = [
   "./", "./index.html", "./css/style.css", "./manifest.webmanifest", "./favicon.svg",
   "./icons/icon-192.png", "./icons/icon-512.png",

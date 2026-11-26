@@ -39,7 +39,7 @@ Une ou plusieurs bédéthèques, pensées pour le téléphone : albums, collecti
 
 **Affichage** (Compte › Affichage, réglage du compte) : sur ordinateur et tablette (900 px de large et plus), la barre de navigation est sur le côté, **à gauche par défaut** ou à droite au choix. Le réglage suit l’adresse e-mail, donc tous les appareils et toutes les bédéthèques. Sur téléphone, elle reste en bas.
 
-**Connexion** : Google, e-mail + mot de passe, ou e-mail seul avec un **lien de connexion** (sans mot de passe). Avec e-mail + mot de passe, l’adresse doit être **vérifiée** (lien envoyé à l’inscription) avant d’accéder aux bédéthèques : sans cela, n’importe qui pourrait créer un compte avec l’adresse d’un autre.
+**Connexion** : Google, e-mail + mot de passe, ou e-mail seul avec un **lien de connexion** (sans mot de passe). Aucune vérification de l’adresse n’est demandée : un compte e-mail + mot de passe accède à ses bédéthèques dès l’inscription. Attention : n’importe qui peut alors créer un compte avec l’adresse d’un autre et voir ses bédéthèques. Pour limiter ce risque, désactiver les inscriptions une fois les comptes créés (Authentication › Paramètres › Actions de l’utilisateur › décocher « Activer la création »).
 
 **Hors connexion** : l’appli s’ouvre sans réseau (service worker) et les données déjà vues restent consultables (cache local Firestore). Les ajouts faits hors ligne partent au retour du réseau.
 
@@ -99,13 +99,13 @@ Projet : `bedetheque-706f1` (déjà renseigné dans `js/firebase-config.js` et `
 2. Dépôt › Settings › Pages › Source : **Deploy from a branch**, branche `main`, dossier `/ (root)`.
 3. Le site est servi en HTTPS, ce qu’exige la caméra pour le scan.
 
-Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v5`…) pour que les téléphones prennent la nouvelle version sans attendre.
+Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v6`…) pour que les téléphones prennent la nouvelle version sans attendre.
 
 Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting`.
 
 ## Confidentialité et partage
 
-- Un compte ne lit et n’écrit que les bédéthèques dont son adresse e-mail est membre, et celles partagées en lecture seule (`firestore.rules`). L’adresse doit être vérifiée.
+- Un compte ne lit et n’écrit que les bédéthèques dont son adresse e-mail est membre, et celles partagées en lecture seule (`firestore.rules`). L’adresse n’est pas vérifiée (voir « Connexion »).
 - **Les adresses e-mail ne sont jamais enregistrées dans Firestore.** Une bédéthèque garde, pour chaque membre, l’**empreinte SHA-256** de son adresse en minuscules (la « clé »), son rôle, le nom affiché et la date d’ajout. Les règles recalculent cette empreinte depuis le jeton de connexion (`hashing.sha256`) pour vérifier l’accès. Une empreinte reste une donnée pseudonymisée (une adresse connue peut être reconnue), pas anonyme : elle n’est lisible que par les membres de la bédéthèque.
 - L’adresse tapée pour ajouter un membre ne reste que dans la page, le temps d’envoyer l’e-mail de prévenance.
 - Les réglages du compte (`accounts/{clé}` : position de la barre, nom par défaut, dernière bédéthèque ouverte) ne sont lisibles que par leur titulaire.
@@ -129,12 +129,12 @@ Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting
 ## Structure
 
 ```
-index.html                 squelette de l'appli (connexion, vérification de l'e-mail, barre du haut, onglets)
+index.html                 squelette de l'appli (connexion, barre du haut, onglets)
 css/style.css              styles (mobile d'abord, clair et sombre)
 js/firebase-config.js      configuration et initialisation Firebase
 js/fs.js                   point d'entrée unique du SDK Firestore
 js/app.js                  routeur, chargement du compte, sélecteur de bédéthèque, position de la barre
-js/auth.js                 connexion Google, e-mail/mot de passe, lien e-mail, vérification de l'adresse
+js/auth.js                 connexion Google, e-mail/mot de passe, lien e-mail
 js/db.js                   accès aux données : bédéthèques, membres, réglages du compte, listes paginées, compteurs, import
 js/isbn.js                 validation ISBN, recherche Google Books / Open Library
 js/image.js                compression des photos de couverture
