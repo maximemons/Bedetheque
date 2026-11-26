@@ -1,10 +1,27 @@
 rules_version = '2';
 
-// Rôles sur une bédéthèque users/{uid} :
-//   - propriétaire     : le compte uid. Seul à gérer le partage public, l'accueil et les co-propriétaires.
-//   - co-propriétaire  : un compte inscrit dans users/{uid}/members/{son uid}. Lit et modifie
-//                        toute la bédéthèque (albums, collections, éditeurs, photos, compteurs, import).
-//   - visiteur         : n'importe qui, en lecture seule, si le propriétaire a activé le partage.
+// ============================================================================
+// Bédéthèque : plusieurs bédéthèques par personne, membres identifiés par e-mail.
+//
+// Identité : une personne = une adresse e-mail VÉRIFIÉE, quel que soit le moyen de
+// connexion (Google, e-mail + mot de passe, lien e-mail). Deux comptes Firebase
+// différents (uid différents) avec la même adresse voient donc les mêmes bédéthèques.
+// L'adresse n'est jamais stockée : on stocke son empreinte SHA-256 (« clé »),
+// calculée ici à partir du jeton de connexion, et côté client à l'identique.
+//
+//   libraries/{lib}            nom, membres (clé → rôle, nom affiché), accueil
+//   libraries/{lib}/{données}  meta, bds, collections, publishers, covers
+//   users/{uid}/{données}      données des bédéthèques créées avec l'ancienne version
+//                              (bédéthèque « historique » : libraries/{uid} avec legacy = true)
+//   shares/{lib}               partage public en lecture seule (le document existe = partagé)
+//   accounts/{clé}             réglages du compte (position de la barre de navigation…)
+//
+// Rôles dans une bédéthèque :
+//   owner  (propriétaire)     : tout, y compris nom, membres, accueil, partage, suppression
+//   editor (co-propriétaire)  : lit et modifie toutes les données ; peut changer son nom affiché
+//                               et quitter la bédéthèque
+//   visiteur                  : lecture seule, si shares/{lib} existe
+// ============================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -12,108 +29,154 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+    // Une adresse non vérifiée (compte e-mail + mot de passe pas encore confirmé)
+    // ne donne accès à rien : sinon n'importe qui pourrait s'inscrire avec l'adresse d'un autre.
+    function verified() {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
     }
 
-    function isCoOwner(uid) {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(uid)/members/$(request.auth.uid));
+    // Empreinte de l'adresse e-mail (64 caractères hexadécimaux, minuscules).
+    function myKey() {
+      return hashing.sha256(request.auth.token.email.lower()).toHexString().lower();
     }
 
-    function canWrite(uid) {
-      return isOwner(uid) || isCoOwner(uid);
+    function libDoc(lib) {
+      return get(/databases/$(database)/documents/libraries/$(lib)).data;
     }
 
-    function isShared(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data.get('shareEnabled', false) == true;
+    function isMember(lib) {
+      return verified() && myKey() in libDoc(lib).memberKeys;
     }
 
-    function canRead(uid) {
-      return canWrite(uid) || isShared(uid);
+    function isLibOwner(lib) {
+      return verified() && libDoc(lib).members[myKey()].role == 'owner';
+    }
+
+    function isShared(lib) {
+      return exists(/databases/$(database)/documents/shares/$(lib));
+    }
+
+    function canRead(lib) {
+      return isShared(lib) || isMember(lib);
+    }
+
+    function isLegacyMember(uid) {
+      return isMember(uid) && libDoc(uid).get('legacy', false) == true;
+    }
+
+    function isLegacyOwner(uid) {
+      return isLibOwner(uid) && libDoc(uid).get('legacy', false) == true;
+    }
+
+    function isDataCollection(sub) {
+      return sub in ['meta', 'bds', 'collections', 'publishers', 'covers'];
     }
 
     function validName(n) {
       return n is string && n.size() >= 1 && n.size() <= 40;
     }
 
-    match /users/{uid} {
-      // Ce document ne contient que : shareEnabled, shareName (nom affiché), réglages de l'accueil.
-      // Aucun e-mail ni donnée d'identité n'y est stocké.
-      allow read: if isOwner(uid) || resource.data.get('shareEnabled', false) == true || isCoOwner(uid);
-      allow create, update: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['shareEnabled', 'shareName', 'home', 'createdAt'])
-        && request.resource.data.get('shareName', '') is string
-        && request.resource.data.get('shareName', '').size() <= 40;
-      allow delete: if isOwner(uid);
+    function validLibrary(d) {
+      return d.keys().hasOnly(['name', 'legacy', 'shared', 'memberKeys', 'members', 'home', 'createdAt', 'updatedAt'])
+        && validName(d.name)
+        && d.legacy is bool
+        && d.shared is bool
+        && d.memberKeys is list
+        && d.memberKeys.size() >= 1
+        && d.memberKeys.size() <= 20
+        && d.memberKeys.toSet().size() == d.memberKeys.size()
+        && d.members is map
+        && d.members.keys().toSet() == d.memberKeys.toSet();
+    }
 
-      match /meta/{docId} {
-        allow read: if canRead(uid);
-        allow write: if canWrite(uid);
-      }
+    // Un co-propriétaire ne touche qu'à sa propre fiche : changer son nom affiché, ou partir.
+    function selfUpdate(before, after) {
+      let k = myKey();
+      return k in before.memberKeys
+        && after.diff(before).affectedKeys().hasOnly(['memberKeys', 'members', 'updatedAt'])
+        && after.members.diff(before.members).affectedKeys().hasOnly([k])
+        && (
+          // quitter la bédéthèque
+          (!(k in after.members)
+            && after.memberKeys.size() == before.memberKeys.size() - 1
+            && after.memberKeys.toSet() == before.memberKeys.toSet().difference([k].toSet()))
+          ||
+          // changer son nom affiché
+          (after.memberKeys == before.memberKeys
+            && after.members[k].diff(before.members[k]).affectedKeys().hasOnly(['name'])
+            && validName(after.members[k].name))
+        );
+    }
 
-      match /bds/{id} {
-        allow read: if canRead(uid);
-        allow write: if canWrite(uid);
-      }
+    // ------------------------------------------------------------------ Bédéthèques
+    match /libraries/{lib} {
+      // « Mes bédéthèques » : requête where('memberKeys', 'array-contains', maClé).
+      allow get, list: if verified() && myKey() in resource.data.memberKeys;
 
-      match /collections/{id} {
-        allow read: if canRead(uid);
-        allow write: if canWrite(uid);
-      }
+      // Création : on en est le seul membre, propriétaire. Identifiant « lib_ » + 20 caractères,
+      // ou, pour reprendre une bédéthèque de l'ancienne version, exactement son uid.
+      allow create: if verified()
+        && validLibrary(request.resource.data)
+        && request.resource.data.memberKeys == [myKey()]
+        && request.resource.data.members[myKey()].role == 'owner'
+        && (
+          (request.resource.data.legacy == false && lib.matches('lib_[A-Za-z0-9]{20}'))
+          || (request.resource.data.legacy == true && lib == request.auth.uid)
+        );
 
-      match /publishers/{id} {
-        allow read: if canRead(uid);
-        allow write: if canWrite(uid);
-      }
+      allow update: if verified() && (
+        (resource.data.members[myKey()].role == 'owner'
+          && validLibrary(request.resource.data)
+          && request.resource.data.legacy == resource.data.legacy)
+        || selfUpdate(resource.data, request.resource.data)
+      );
 
-      // Photos de couverture prises au téléphone (≈ 200 Ko maximum chacune).
-      match /covers/{id} {
-        allow read: if canRead(uid);
-        allow write: if canWrite(uid);
-      }
+      allow delete: if verified() && resource.data.members[myKey()].role == 'owner';
 
-      // Invitations à devenir co-propriétaire. L'identifiant (code aléatoire) sert de secret :
-      // seul celui qui a le lien peut lire l'invitation. Une invitation ne sert qu'une fois.
-      match /invites/{code} {
-        allow get: if signedIn();
-        allow list: if isOwner(uid);
-        allow create: if isOwner(uid)
-          && request.resource.data.keys().hasOnly(['ownerName', 'createdAt', 'expiresAt'])
-          && validName(request.resource.data.ownerName)
-          && request.resource.data.expiresAt is timestamp
-          && request.resource.data.expiresAt < request.time + duration.value(31, 'd');
-        // Le propriétaire annule ; l'invité la consomme dans le même lot que son inscription.
-        allow delete: if isOwner(uid)
-          || (signedIn() && getAfter(/databases/$(database)/documents/users/$(uid)/members/$(request.auth.uid)).data.invite == code);
-      }
-
-      // Co-propriétaires : { uid, name (nom choisi par la personne), invite, joinedAt }.
-      match /members/{memberId} {
-        allow read: if canWrite(uid) || (signedIn() && request.auth.uid == memberId);
-        // On ne peut s'inscrire soi-même qu'avec une invitation valide, consommée dans le même lot.
-        allow create: if signedIn()
-          && request.auth.uid == memberId
-          && memberId != uid
-          && request.resource.data.keys().hasOnly(['uid', 'name', 'invite', 'joinedAt'])
-          && request.resource.data.uid == memberId
-          && validName(request.resource.data.name)
-          && request.resource.data.invite is string
-          && request.resource.data.joinedAt == request.time
-          && get(/databases/$(database)/documents/users/$(uid)/invites/$(request.resource.data.invite)).data.expiresAt > request.time
-          && !existsAfter(/databases/$(database)/documents/users/$(uid)/invites/$(request.resource.data.invite));
-        // Un co-propriétaire peut changer son nom affiché, rien d'autre.
-        allow update: if signedIn()
-          && request.auth.uid == memberId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-          && validName(request.resource.data.name);
-        // Le propriétaire retire un co-propriétaire ; un co-propriétaire peut partir.
-        allow delete: if isOwner(uid) || (signedIn() && request.auth.uid == memberId);
+      match /{sub}/{id} {
+        allow read: if isDataCollection(sub) && canRead(lib);
+        allow write: if isDataCollection(sub) && isMember(lib);
       }
     }
 
-    // « Les bédéthèques dont je suis co-propriétaire » : requête sur toutes les sous-collections members.
-    match /{path=**}/members/{memberId} {
-      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+    // ------------------------------------------------------------------ Partage public
+    match /shares/{lib} {
+      // Le lien suffit : pas besoin de compte pour lire une bédéthèque partagée.
+      allow get: if true;
+      allow create, update: if isLibOwner(lib)
+        && request.resource.data.keys().hasOnly(['name', 'home', 'updatedAt'])
+        && validName(request.resource.data.name);
+      allow delete: if isLibOwner(lib);
+    }
+
+    // ------------------------------------------------------------------ Réglages du compte
+    // Communs à toutes les façons de se connecter avec la même adresse.
+    match /accounts/{key} {
+      allow read, delete: if verified() && key == myKey();
+      allow create, update: if verified() && key == myKey()
+        && request.resource.data.keys().hasOnly(['navPosition', 'pseudo', 'lastLibrary', 'updatedAt'])
+        && request.resource.data.get('navPosition', 'left') in ['left', 'right']
+        && request.resource.data.get('pseudo', '') is string
+        && request.resource.data.get('pseudo', '').size() <= 40
+        && request.resource.data.get('lastLibrary', '') is string
+        && request.resource.data.get('lastLibrary', '').size() <= 64;
+    }
+
+    // ------------------------------------------------------------------ Ancienne version
+    // Les données des bédéthèques créées avant les bédéthèques multiples restent sous users/{uid}
+    // (aucune copie, aucun coût). Elles sont rattachées à libraries/{uid} (legacy = true),
+    // qui en porte les membres. Le compte d'origine peut lire son ancien document pour la reprise.
+    match /users/{uid} {
+      allow get: if (signedIn() && request.auth.uid == uid) || isLegacyMember(uid);
+      allow delete: if (signedIn() && request.auth.uid == uid) || isLegacyOwner(uid);
+
+      match /{sub}/{id} {
+        allow read: if isDataCollection(sub)
+          && ((signedIn() && request.auth.uid == uid) || isShared(uid) || isLegacyMember(uid));
+        allow write: if isDataCollection(sub) && isLegacyMember(uid);
+      }
     }
   }
 }

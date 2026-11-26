@@ -98,7 +98,7 @@ function templateCsv() {
 export async function render(ctx) {
   ctx.setTitle("Importer un CSV", { back: "compte" });
   const st = { file: null, rows: [], headers: [], mapping: {}, running: false, stop: false, wake: null };
-  const progressKey = () => `bdt:import:${ctx.uid}:${st.file.name}:${st.file.size}`;
+  const progressKey = () => `bdt:import:${ctx.libId}:${st.file.name}:${st.file.size}`;
   const lastLine = () => st.rows.length + 1; // l'en-tête est la ligne 1
 
   ctx.render(`
@@ -302,7 +302,7 @@ export async function render(ctx) {
         }
       }
       try {
-        const res = await importChunk(ctx.uid, entries);
+        const res = await importChunk(ctx.libId, entries);
         added += res.added;
         skipped += res.skipped.length;
         writes += res.writes;

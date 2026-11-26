@@ -29,6 +29,9 @@ const P = {
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7L11.5 7"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  shelf: '<path d="M3 20h18M5 20V6h3v14M10 20V4h3v16M15.5 6.5l3-.8 3.4 13.5"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 7 9 6 9-6"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M9 4v16"/>',
   logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
   google: '<path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5a4.3 4.3 0 0 1-1.9 2.8v2.3h3c1.8-1.6 2.9-4 2.9-6.8z" fill="#4285F4" stroke="none"/><path d="M12 21.5c2.5 0 4.7-.8 6.2-2.3l-3-2.3c-.8.6-1.9.9-3.2.9-2.4 0-4.5-1.6-5.2-3.9H3.7v2.4a9.5 9.5 0 0 0 8.3 5.2z" fill="#34A853" stroke="none"/><path d="M6.8 13.9a5.7 5.7 0 0 1 0-3.7V7.8H3.7a9.5 9.5 0 0 0 0 8.5z" fill="#FBBC05" stroke="none"/><path d="M12 6.4c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.3 9.3 0 0 0 12 2.5 9.5 9.5 0 0 0 3.7 7.8l3.1 2.4C7.5 7.9 9.6 6.4 12 6.4z" fill="#EA4335" stroke="none"/>'
 };
@@ -100,7 +103,7 @@ export function errorHtml(err) {
       <p><a href="${esc(link[0])}" target="_blank" rel="noopener">Créer l’index dans la console Firebase</a> (quelques minutes), ou déployez <code>firestore.indexes.json</code>.</p></div>`;
   }
   if (err?.code === "permission-denied") {
-    return `<div class="notice notice-warn"><p>Accès refusé. Cette bédéthèque n’est pas partagée, ou les règles Firestore ne sont pas publiées.</p></div>`;
+    return `<div class="notice notice-warn"><p>Accès refusé. Vous n’êtes pas (ou plus) membre de cette bédéthèque, elle n’est pas partagée, ou les règles Firestore ne sont pas publiées.</p></div>`;
   }
   return `<div class="notice notice-warn"><p>${esc(msg)}</p></div>`;
 }

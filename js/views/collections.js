@@ -27,7 +27,7 @@ export async function renderList(ctx) {
   let pager;
   const chips = ctx.el.querySelector("[data-chips]");
   if (st.pub) {
-    getPublisher(ctx.uid, st.pub).then((p) => {
+    getPublisher(ctx.libId, st.pub).then((p) => {
       if (!ctx.alive()) return;
       chips.innerHTML = `<button class="chip" type="button">Éditeur : ${esc(p?.name || "?")} ${icon("close")}</button>`;
       chips.firstElementChild.onclick = () => { st.pub = ""; chips.innerHTML = ""; reload(); };
@@ -42,7 +42,7 @@ export async function renderList(ctx) {
     history.replaceState(null, "", ctx.link("collections") + (p.toString() ? "?" + p : ""));
     pager = createPager({
       list,
-      fetchPage: (cursor) => listCollections(ctx.uid, { q: st.q, sort: st.sort, publisherId: st.pub || null, cursor }),
+      fetchPage: (cursor) => listCollections(ctx.libId, { q: st.q, sort: st.sort, publisherId: st.pub || null, cursor }),
       render: (c) => collectionRow(c, ctx.link(`collection/${c.id}`)),
       empty: () => st.q || st.pub
         ? emptyState("Aucune collection ne correspond", "Essayez avec le début d’un autre mot du nom.")
@@ -64,7 +64,7 @@ export async function renderDetail(ctx) {
   const [id] = ctx.params;
   ctx.setTitle("Collection", { back: "collections" });
   ctx.render(spinner());
-  const col = await getCollectionDoc(ctx.uid, id);
+  const col = await getCollectionDoc(ctx.libId, id);
   if (!ctx.alive()) return;
   if (!col) return ctx.render(emptyState("Cette collection n’existe plus", "", `<a class="btn btn-primary" href="${ctx.link("collections")}">Voir les collections</a>`));
 
@@ -79,7 +79,7 @@ export async function renderDetail(ctx) {
     </div>
     <div data-body>${spinner()}</div>`);
 
-  const bds = await listBdsOfCollection(ctx.uid, id);
+  const bds = await listBdsOfCollection(ctx.libId, id);
   if (!ctx.alive()) return;
   const byNum = new Map();
   const others = [];
@@ -111,7 +111,7 @@ export async function renderDetail(ctx) {
       { title: "Supprimer la collection ?", ok: "Tout supprimer", danger: true });
     if (!ok) return;
     try {
-      await deleteCollection(ctx.uid, col, (k) => toast(`${k} album${k > 1 ? "s" : ""} supprimé${k > 1 ? "s" : ""}…`));
+      await deleteCollection(ctx.libId, col, (k) => toast(`${k} album${k > 1 ? "s" : ""} supprimé${k > 1 ? "s" : ""}…`));
       toast("Collection supprimée");
       ctx.go("collections");
     } catch (e) {
@@ -126,7 +126,7 @@ export async function renderForm(ctx) {
   let col = null;
   if (id) {
     ctx.render(spinner());
-    col = await getCollectionDoc(ctx.uid, id);
+    col = await getCollectionDoc(ctx.libId, id);
     if (!ctx.alive()) return;
     if (!col) return ctx.render(emptyState("Cette collection n’existe plus"));
   }
@@ -143,7 +143,7 @@ export async function renderForm(ctx) {
   const form = ctx.el.querySelector("form");
   const pubInput = form.elements.publisherName;
   pubInput.addEventListener("input", debounce(async () => {
-    const items = await suggest(ctx.uid, "publishers", pubInput.value).catch(() => []);
+    const items = await suggest(ctx.libId, "publishers", pubInput.value).catch(() => []);
     ctx.el.querySelector("#dl-pub").innerHTML = items.map((p) => `<option value="${esc(p.name)}">`).join("");
   }, 300));
   form.onsubmit = async (e) => {
@@ -151,7 +151,7 @@ export async function renderForm(ctx) {
     const btn = form.querySelector("[type=submit]");
     btn.disabled = true;
     try {
-      const newId = await saveCollection(ctx.uid, {
+      const newId = await saveCollection(ctx.libId, {
         name: form.elements.name.value, publisherName: pubInput.value,
         totalVolumes: form.elements.totalVolumes.value, notes: form.elements.notes.value
       }, col);

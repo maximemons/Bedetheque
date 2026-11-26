@@ -1,6 +1,6 @@
 # Bédéthèque
 
-Une bédéthèque personnelle, pensée pour le téléphone : albums, collections (séries) et éditeurs, avec l’état, la cote, le numéro de tome, les tomes manquants, le scan du code-barres et l’import CSV de masse. Site statique (aucune compilation), hébergeable sur GitHub Pages, avec Firebase pour la connexion et la base de données.
+Une ou plusieurs bédéthèques, pensées pour le téléphone : albums, collections (séries) et éditeurs, avec l’état, la cote, le numéro de tome, les tomes manquants, le scan du code-barres et l’import CSV de masse. Site statique (aucune compilation), hébergeable sur GitHub Pages, avec Firebase pour la connexion et la base de données.
 
 ## Ce que fait l’appli
 
@@ -22,19 +22,24 @@ Une bédéthèque personnelle, pensée pour le téléphone : albums, collections
 **Éditeurs**
 - Nombre de collections chez chaque éditeur, liste de ses collections, accès à tous ses albums.
 
-**Accueil réglable** (Mon compte › Page d’accueil) : chiffres clés, derniers achats, derniers ajouts, collections à compléter, répartition par cote, répartition par état. On choisit les blocs, leur ordre et le nombre d’albums affichés.
+**Accueil réglable** (Compte › Page d’accueil, par bédéthèque) : chiffres clés, derniers achats, derniers ajouts, collections à compléter, répartition par cote, répartition par état. On choisit les blocs, leur ordre et le nombre d’albums affichés.
 
-**Partage en lecture seule** (Mon compte › Partage) : un lien `…/#/p/<identifiant>` montre la bédéthèque sans permettre de la modifier, même à quelqu’un sans compte. Le partage se coupe d’un clic.
+**Plusieurs bédéthèques par personne**
+- Autant de bédéthèques que l’on veut : une personnelle, une partagée avec son conjoint, une pour les mangas… Chacune a son **nom** (renommable), ses albums, collections, éditeurs, compteurs, page d’accueil et partage.
+- Le **bouton en haut à droite** (nom de la bédéthèque ouverte) permet de passer de l’une à l’autre ou d’en **créer une nouvelle**. La liste est aussi dans Compte › Mes bédéthèques. L’appli rouvre la dernière utilisée, sur tous les appareils.
+- Les bédéthèques sont rattachées à l’**adresse e-mail**, pas au compte de connexion : se connecter avec Google ou avec e-mail + mot de passe sur la même adresse donne accès aux mêmes bédéthèques.
 
-**Co-propriétaires** (Mon compte › Co-propriétaires) : le propriétaire invite d’autres comptes à partager **toute** sa bédéthèque, en lecture et en écriture.
-- Le propriétaire choisit son **nom affiché**, puis appuie sur **Inviter un co-propriétaire** : un lien `…/#/rejoindre/<identifiant>/<code>` est créé. Chaque lien ne sert qu’à **une seule personne** et expire au bout de **7 jours** ; on peut l’annuler avant.
-- L’invité ouvre le lien, se connecte (ou crée un compte), choisit le nom sous lequel il apparaîtra et accepte. Il ouvre ensuite la bédéthèque commune à l’adresse `…/#/b/<identifiant>/` ; un bandeau violet rappelle qu’il y est **co-propriétaire**, avec un lien vers sa propre bédéthèque.
-- Un co-propriétaire peut tout faire sur les albums, collections, éditeurs et photos : ajouter, scanner, modifier, supprimer, importer un CSV, recalculer les compteurs.
-- Le **propriétaire** garde seul la main sur le partage en lecture seule, la page d’accueil, son nom affiché et la liste des co-propriétaires. La liste montre chacun avec son rôle : **Propriétaire** ou **Co-propriétaire**.
-- Le propriétaire retire un co-propriétaire d’un appui ; un co-propriétaire peut **quitter** la bédéthèque. L’accès est coupé immédiatement ; ce qu’il a ajouté reste.
-- Chaque compte garde sa propre bédéthèque. « Mes bédéthèques », dans le compte, permet de passer de l’une à l’autre ; l’appli rouvre la dernière utilisée.
+**Membres** (Compte › Membres, pour la bédéthèque ouverte)
+- Un propriétaire ajoute un membre avec son **adresse e-mail**, un nom affiché et un rôle. La personne voit la bédéthèque dès qu’elle se connecte avec cette adresse, quel que soit le moyen de connexion. Un bouton « Prévenir par e-mail » prépare le message.
+- **Co-propriétaire** : tout faire sur les albums, collections, éditeurs et photos (ajouter, scanner, modifier, supprimer, importer, recalculer les compteurs).
+- **Propriétaire** : en plus, renommer la bédéthèque, gérer les membres et leurs rôles, régler l’accueil et le partage, supprimer la bédéthèque. Il peut y avoir plusieurs propriétaires.
+- Chaque membre peut changer son nom affiché et **quitter** la bédéthèque (un propriétaire seulement s’il en reste un autre). L’accès est coupé immédiatement ; ce qui a été ajouté reste. 20 membres au plus.
 
-**Connexion** : Google, e-mail + mot de passe, ou e-mail seul avec un **lien de connexion** (sans mot de passe).
+**Partage en lecture seule** (Compte › Partage, par bédéthèque) : un lien `…/#/p/<identifiant>` montre la bédéthèque sans permettre de la modifier, même à quelqu’un sans compte. Le partage se coupe d’un clic.
+
+**Affichage** (Compte › Affichage, réglage du compte) : sur ordinateur et tablette (900 px de large et plus), la barre de navigation est sur le côté, **à gauche par défaut** ou à droite au choix. Le réglage suit l’adresse e-mail, donc tous les appareils et toutes les bédéthèques. Sur téléphone, elle reste en bas.
+
+**Connexion** : Google, e-mail + mot de passe, ou e-mail seul avec un **lien de connexion** (sans mot de passe). Avec e-mail + mot de passe, l’adresse doit être **vérifiée** (lien envoyé à l’inscription) avant d’accéder aux bédéthèques : sans cela, n’importe qui pourrait créer un compte avec l’adresse d’un autre.
 
 **Hors connexion** : l’appli s’ouvre sans réseau (service worker) et les données déjà vues restent consultables (cache local Firestore). Les ajouts faits hors ligne partent au retour du réseau.
 
@@ -43,14 +48,14 @@ Une bédéthèque personnelle, pensée pour le téléphone : albums, collections
 Rien n’est jamais chargé en entier :
 
 - **Listes paginées** (30 par page, chargement au défilement).
-- **Compteurs tenus à jour par incréments** (`users/{uid}/meta/stats`, `ownedCount` des collections, `collectionCount` des éditeurs) : l’accueil coûte quelques lectures, que l’on ait 50 ou 50 000 albums.
+- **Compteurs tenus à jour par incréments** (`libraries/{id}/meta/stats`, `ownedCount` des collections, `collectionCount` des éditeurs) : l’accueil coûte quelques lectures, que l’on ait 50 ou 50 000 albums.
 - **Recherche indexée** : chaque album porte un tableau `keywords` (débuts de mots de 2 à 15 lettres, ISBN, année). Une recherche = une requête `array-contains`, filtrée ensuite sur les autres mots.
 - **Autocomplétion** des collections et éditeurs : quelques documents lus à chaque frappe, jamais la liste complète.
-- **Recalcul des compteurs** (Mon compte › Données) par requêtes d’agrégation : environ 1 lecture par tranche de 1 000 albums, plus 1 par collection.
+- **Recalcul des compteurs** (Compte › Données) par requêtes d’agrégation : environ 1 lecture par tranche de 1 000 albums, plus 1 par collection.
 
 ## Import CSV de masse
 
-Mon compte › Données (en bas de la page) › **Importer un fichier CSV**.
+Compte › Données › **Importer un fichier CSV** (dans la bédéthèque ouverte).
 
 1. **Fichier** : CSV avec une ligne d’en-tête, séparateur `;` ou `,` détecté tout seul. Choisir « Windows » si les accents sortent mal (vieux exports Excel). Un modèle est téléchargeable dans la page, et `exemple-import.csv` est fourni.
 2. **Colonnes** : reconnues automatiquement (ISBN, Titre, Série, Tome, Éditeur, Scénariste, Dessinateur, Coloriste, Auteurs, Année, Pages, État, Cote, Date d’achat, EO, Couverture, Notes, Nb tomes), corrigeables une à une. La cote s’écrit en toutes lettres (« pas coté », « faiblement », « moyennement », « fortement coté ») ou de 0 à 3. Si seule une colonne « Titre » du type « Astérix - Tome 12 - … » existe, série et tome en sont extraits.
@@ -74,9 +79,10 @@ Projet : `bedetheque-706f1` (déjà renseigné dans `js/firebase-config.js` et `
 1. **Authentication › Méthodes de connexion** : activer
    - **Google** ;
    - **Adresse e-mail/Mot de passe**, avec l’option **Lien envoyé par e-mail (connexion sans mot de passe)**.
+   - Conseillé : Authentication › Paramètres › **Association des comptes utilisateur** : laisser « Associer les comptes qui utilisent la même adresse e-mail » ou « Créer plusieurs comptes » ; l’appli fonctionne dans les deux cas, puisqu’elle retrouve les bédéthèques par l’adresse.
 2. **Authentication › Paramètres › Domaines autorisés** : ajouter le domaine GitHub Pages, par exemple `monpseudo.github.io`.
 3. **Firestore Database** : créer la base (mode production, région `eur3` ou `europe-west` conseillée).
-4. **Règles et index** : publier `firestore.rules` et `firestore.indexes.json`.
+4. **Règles et index** : publier `firestore.rules` et `firestore.indexes.json` (obligatoire après la mise à jour vers les bédéthèques multiples).
 
    ```bash
    npm install -g firebase-tools
@@ -93,22 +99,24 @@ Projet : `bedetheque-706f1` (déjà renseigné dans `js/firebase-config.js` et `
 2. Dépôt › Settings › Pages › Source : **Deploy from a branch**, branche `main`, dossier `/ (root)`.
 3. Le site est servi en HTTPS, ce qu’exige la caméra pour le scan.
 
-Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v3`…) pour que les téléphones prennent la nouvelle version sans attendre.
+Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v5`…) pour que les téléphones prennent la nouvelle version sans attendre.
 
 Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting`.
 
 ## Confidentialité et partage
 
-- Chaque compte ne lit et n’écrit que ses propres données, et celles des bédéthèques dont il est co-propriétaire (`firestore.rules`). Un compte ne peut s’inscrire comme co-propriétaire qu’avec une invitation valide, qu’il consomme dans la même écriture.
-- Aucune donnée d’identité issue de la connexion (e-mail, nom du compte Google) n’est enregistrée dans Firestore : le document `users/{uid}` ne contient que le réglage du partage, le nom affiché choisi par l’utilisateur et les réglages de l’accueil ; une fiche de co-propriétaire ne contient que son identifiant technique, le nom affiché qu’il a lui-même choisi et la date d’arrivée.
-- Le nom affiché d’un co-propriétaire n’est visible que du propriétaire et des autres co-propriétaires, jamais des visiteurs du partage en lecture seule.
+- Un compte ne lit et n’écrit que les bédéthèques dont son adresse e-mail est membre, et celles partagées en lecture seule (`firestore.rules`). L’adresse doit être vérifiée.
+- **Les adresses e-mail ne sont jamais enregistrées dans Firestore.** Une bédéthèque garde, pour chaque membre, l’**empreinte SHA-256** de son adresse en minuscules (la « clé »), son rôle, le nom affiché et la date d’ajout. Les règles recalculent cette empreinte depuis le jeton de connexion (`hashing.sha256`) pour vérifier l’accès. Une empreinte reste une donnée pseudonymisée (une adresse connue peut être reconnue), pas anonyme : elle n’est lisible que par les membres de la bédéthèque.
+- L’adresse tapée pour ajouter un membre ne reste que dans la page, le temps d’envoyer l’e-mail de prévenance.
+- Les réglages du compte (`accounts/{clé}` : position de la barre, nom par défaut, dernière bédéthèque ouverte) ne sont lisibles que par leur titulaire.
+- Les noms des membres ne sont visibles que des membres, jamais des visiteurs du partage en lecture seule. Le document de partage `shares/{id}` ne contient que le nom de la bédéthèque et les réglages de l’accueil.
 - Quand le partage est actif, **tous les champs des albums sont lisibles** par les visiteurs, y compris cotes, dates d’achat, photos et notes. Ne pas mettre d’informations personnelles dans les notes d’une bédéthèque partagée.
 - Les recherches ISBN partent directement du navigateur vers Google Books et Open Library (seul l’ISBN est envoyé).
 
 ## Photos de couverture
 
 - Sur la fiche d’ajout ou de modification : **Prendre une photo** ouvre l’appareil photo, **Choisir une image** ouvre la galerie.
-- La photo est réduite et compressée sur le téléphone avant l’envoi, en deux versions : une vignette (environ 25 Ko) dans l’album, pour que les listes restent rapides, et une version nette (environ 200 Ko au plus) dans `users/{uid}/covers/{id}`, lue seulement à l’ouverture de la fiche.
+- La photo est réduite et compressée sur le téléphone avant l’envoi, en deux versions : une vignette (environ 25 Ko) dans l’album, pour que les listes restent rapides, et une version nette (environ 200 Ko au plus) dans `libraries/{id}/covers/{bdId}`, lue seulement à l’ouverture de la fiche.
 - Tout est stocké dans Firestore : pas besoin de Firebase Storage, qui exige l’offre Blaze sur les nouveaux projets. Une photo compte comme une écriture de plus.
 - Une photo remplace la couverture trouvée par ISBN ; « Retirer la couverture » la supprime.
 
@@ -121,13 +129,13 @@ Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting
 ## Structure
 
 ```
-index.html                 squelette de l'appli (connexion, barre du haut, onglets)
+index.html                 squelette de l'appli (connexion, vérification de l'e-mail, barre du haut, onglets)
 css/style.css              styles (mobile d'abord, clair et sombre)
 js/firebase-config.js      configuration et initialisation Firebase
 js/fs.js                   point d'entrée unique du SDK Firestore
-js/app.js                  routeur, écran de connexion ou appli, mode partage
-js/auth.js                 connexion Google, e-mail/mot de passe, lien e-mail
-js/db.js                   accès aux données : listes paginées, compteurs, import, recalcul
+js/app.js                  routeur, chargement du compte, sélecteur de bédéthèque, position de la barre
+js/auth.js                 connexion Google, e-mail/mot de passe, lien e-mail, vérification de l'adresse
+js/db.js                   accès aux données : bédéthèques, membres, réglages du compte, listes paginées, compteurs, import
 js/isbn.js                 validation ISBN, recherche Google Books / Open Library
 js/image.js                compression des photos de couverture
 js/scanner.js              scan du code-barres (natif ou html5-qrcode)
@@ -140,9 +148,8 @@ js/views/bds.js            liste et fiche album
 js/views/bd-form.js        ajout et modification d'un album
 js/views/collections.js    liste, fiche et formulaire collection
 js/views/publishers.js     liste, fiche et formulaire éditeur
-js/views/account.js        compte : bédéthèques, co-propriétaires, accueil, partage, données
+js/views/account.js        compte (connexion, affichage, mes bédéthèques) et bédéthèque ouverte (nom, membres, accueil, partage, données, suppression)
 js/views/import.js         import CSV de masse
-js/views/join.js           acceptation d'une invitation de co-propriétaire
 js/vendor/                 papaparse (MIT), html5-qrcode (Apache-2.0)
 sw.js                      service worker (appli hors connexion)
 manifest.webmanifest       installation sur l'écran d'accueil
@@ -155,36 +162,44 @@ exemple-import.csv         fichier d'exemple pour l'import
 ## Données Firestore
 
 ```
-users/{uid}                    shareEnabled, shareName, home { widgets[], recentCount }
-users/{uid}/meta/stats         bdCount, collectionCount, publisherCount, etat { neuf, tbe, be, ec, mauvais, nc }, cote { 0, 1, 2, 3 }
-users/{uid}/bds/{id}           isbn, titre, collectionId, collectionName, numero, publisherId, publisherName,
+accounts/{clé}                 navPosition ("left" | "right"), pseudo, lastLibrary, updatedAt
+libraries/{id}                 name, legacy, shared, memberKeys[], members { clé: { role, name, addedAt } },
+                               home { widgets[], recentCount }, createdAt, updatedAt
+libraries/{id}/meta/stats      bdCount, collectionCount, publisherCount, etat { neuf, tbe, be, ec, mauvais, nc }, cote { 0, 1, 2, 3 }
+libraries/{id}/bds/{bdId}      isbn, titre, collectionId, collectionName, numero, publisherId, publisherName,
                                scenariste, dessinateur, coloriste, auteurs, annee, pages, couverture, hasCoverPhoto, resume,
                                etat, cote (0 pas coté … 3 fortement coté), dateAchat (AAAA-MM-JJ), eo, notes,
                                titleLower, seriesSort, keywords[], createdAt, updatedAt
-users/{uid}/collections/{id}   name, nameLower, publisherId, publisherName, totalVolumes, ownedCount, notes, keywords[]
-users/{uid}/publishers/{id}    name, nameLower, collectionCount, notes, keywords[]
-users/{uid}/covers/{bdId}      data (photo de couverture en grand, JPEG)
-users/{uid}/members/{memberUid} uid, name (nom affiché choisi), invite, joinedAt          co-propriétaires
-users/{uid}/invites/{code}     ownerName, createdAt, expiresAt                          invitations en attente
+libraries/{id}/collections/{c} name, nameLower, publisherId, publisherName, totalVolumes, ownedCount, notes, keywords[]
+libraries/{id}/publishers/{p}  name, nameLower, collectionCount, notes, keywords[]
+libraries/{id}/covers/{bdId}   data (photo de couverture en grand, JPEG)
+shares/{id}                    name, home                       existe = partagée en lecture seule
 ```
 
-Propriétaire et co-propriétaires travaillent sur les mêmes documents, sous `users/{uid du propriétaire}`. La liste « Mes bédéthèques » d’un compte vient d’une requête de groupe sur `members` (champ `uid`), d’où l’entrée de `fieldOverrides` dans `firestore.indexes.json`.
+`clé` = SHA-256 (hexadécimal, minuscules) de l’adresse e-mail en minuscules. « Mes bédéthèques » = une requête `where("memberKeys", "array-contains", clé)` (index simple, créé automatiquement).
 
-Les règles vérifient l’appartenance par un `exists()` sur `members/{uid}` à chaque écriture d’un co-propriétaire. Firestore met en cache les accès répétés au même document dans une requête, ce qui permet les lots de l’import ; si un import de co-propriétaire était refusé par lots entiers, réduire la taille des lots dans `js/views/import.js`.
+Les identifiants des nouvelles bédéthèques commencent par `lib_` (vérifié par les règles).
+
+### Reprise des données de l’ancienne version
+
+Avant les bédéthèques multiples, chaque compte avait une seule bédéthèque sous `users/{uid}`. Au premier lancement de la nouvelle version, l’appli la rattache **sans rien copier** (aucune écriture d’album, quel que soit leur nombre) : elle crée `libraries/{uid}` avec `legacy: true` et le compte comme propriétaire, sous le nom « Ma bédéthèque » (renommable). Les données restent sous `users/{uid}/…` et l’appli y va directement pour cette bédéthèque. Si le partage public était actif, il est recréé : les anciens liens `#/p/<uid>` marchent toujours.
+
+Les anciens co-propriétaires (invitations par lien) ne sont **pas** repris, faute d’adresse e-mail : le propriétaire les ajoute de nouveau avec leur adresse dans Compte › Membres. Les liens `#/rejoindre/…` ne servent plus.
 
 Les champs triables existent toujours (éventuellement à `null`), sinon Firestore exclurait l’album des tris.
 
 ## Navigation
 
+Toutes les pages d’une bédéthèque sont sous `#/b/<bédéthèque>/` :
+
 ```
-#/                      accueil
-#/bds?q=&sort=&dir=&etat=&cote=&col=&pub=    albums
-#/bd/new?isbn=&col=&num=&scan=1        ajout
-#/bd/<id>  #/bd/<id>/edit
-#/collections  #/collection/<id>  #/collection/new  #/collection/<id>/edit
-#/editeurs     #/editeur/<id>     #/editeur/new     #/editeur/<id>/edit
-#/compte  #/import
-#/p/<uid>/…             mêmes pages en lecture seule (partage)
-#/b/<uid>/…             mêmes pages pour un co-propriétaire (accès complet)
-#/rejoindre/<uid>/<code>  accepter une invitation de co-propriétaire
+#/b/<id>/                      accueil
+#/b/<id>/bds?q=&sort=&dir=&etat=&cote=&col=&pub=    albums
+#/b/<id>/bd/new?isbn=&col=&num=&scan=1               ajout
+#/b/<id>/bd/<bdId>  #/b/<id>/bd/<bdId>/edit
+#/b/<id>/collections  #/b/<id>/collection/<c>  …/collection/new  …/collection/<c>/edit
+#/b/<id>/editeurs     #/b/<id>/editeur/<p>     …/editeur/new     …/editeur/<p>/edit
+#/b/<id>/compte  #/b/<id>/import
+#/p/<id>/…             mêmes pages en lecture seule (partage public, sans compte)
+#/  #/bds  …           raccourcis : ouvrent la dernière bédéthèque utilisée (les anciens liens restent valables)
 ```

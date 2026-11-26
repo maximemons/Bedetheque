@@ -2,7 +2,7 @@ import { auth, googleProvider } from "./firebase-config.js";
 import {
   onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail,
-  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
+  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 import { $ } from "./utils.js";
 import { promptDialog } from "./ui.js";
@@ -28,6 +28,31 @@ const msgFor = (e) => MESSAGES[e?.code] || e?.message || "La connexion a échou�
 
 export const onUser = (cb) => onAuthStateChanged(auth, cb);
 export const logout = () => signOut(auth);
+
+const appUrl = () => location.origin + location.pathname;
+
+/**
+ * Les bédéthèques sont rattachées à une adresse e-mail : elle doit être vérifiée.
+ * C'est le cas d'office avec Google et avec le lien de connexion ; avec e-mail + mot de passe,
+ * il faut cliquer sur le lien reçu par e-mail.
+ */
+export const needsVerification = (user) => !!user && !!user.email && !user.emailVerified;
+
+export async function resendVerification() {
+  if (!auth.currentUser) return;
+  await sendEmailVerification(auth.currentUser, { url: appUrl() });
+}
+
+/** Relit l'état du compte et renouvelle le jeton (les règles lisent « email_verified » dans le jeton). */
+export async function reloadUser() {
+  const u = auth.currentUser;
+  if (!u) return null;
+  await u.reload();
+  await u.getIdToken(true);
+  return auth.currentUser;
+}
+
+export const authMessage = (e) => msgFor(e);
 
 /** À appeler au démarrage : termine une connexion par lien e-mail ou par redirection Google. */
 export async function completePendingSignIn() {
@@ -91,7 +116,8 @@ export function bindLoginScreen() {
 
   $("#btn-signup").onclick = (e) => busy(e.currentTarget, async () => {
     if (!email() || !password()) return showError("Saisissez un e-mail et un mot de passe (6 caractères minimum).");
-    await createUserWithEmailAndPassword(auth, email(), password());
+    const cred = await createUserWithEmailAndPassword(auth, email(), password());
+    await sendEmailVerification(cred.user, { url: appUrl() }).catch((err) => console.warn("Vérification", err));
   });
 
   $("#btn-reset").onclick = (e) => busy(e.currentTarget, async () => {
@@ -102,7 +128,7 @@ export function bindLoginScreen() {
 
   $("#btn-link").onclick = (e) => busy(e.currentTarget, async () => {
     if (!email()) return showError("Saisissez votre e-mail pour recevoir le lien.");
-    await sendSignInLinkToEmail(auth, email(), { url: location.origin + location.pathname, handleCodeInApp: true });
+    await sendSignInLinkToEmail(auth, email(), { url: appUrl(), handleCodeInApp: true });
     localStorage.setItem(EMAIL_KEY, email());
     showInfo(`Lien envoyé à ${email()}. Ouvrez-le sur cet appareil pour vous connecter.`);
   });

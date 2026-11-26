@@ -9,7 +9,7 @@ import { scanIsbn } from "../scanner.js";
 const VIEW_KEY = "bdt:libraryView";
 
 export async function renderList(ctx) {
-  ctx.setTitle(ctx.role === "owner" ? "Mes BD" : "BD");
+  ctx.setTitle("BD", { kicker: ctx.libraryName });
   if (!ctx.readOnly) ctx.setFab({ label: "Ajouter", href: "bd/new" });
 
   const q = ctx.query;
@@ -55,11 +55,11 @@ export async function renderList(ctx) {
   const renderChips = async () => {
     const parts = [];
     if (st.col) {
-      const c = await getCollectionDoc(ctx.uid, st.col).catch(() => null);
+      const c = await getCollectionDoc(ctx.libId, st.col).catch(() => null);
       parts.push(`<button class="chip" type="button" data-clear="col">Collection : ${esc(c?.name || "?")} ${icon("close")}</button>`);
     }
     if (st.pub) {
-      const p = await getPublisher(ctx.uid, st.pub).catch(() => null);
+      const p = await getPublisher(ctx.libId, st.pub).catch(() => null);
       parts.push(`<button class="chip" type="button" data-clear="pub">Éditeur : ${esc(p?.name || "?")} ${icon("close")}</button>`);
     }
     if (!ctx.alive()) return;
@@ -83,7 +83,7 @@ export async function renderList(ctx) {
     const render = st.view === "grid" ? (bd) => bdTile(bd, ctx.link(`bd/${bd.id}`)) : (bd) => bdRow(bd, ctx.link(`bd/${bd.id}`));
     pager = createPager({
       list,
-      fetchPage: (cursor) => listBds(ctx.uid, { q: st.q, sort: st.sort, dir: st.dir || null, etat: st.etat, cote: st.cote, collectionId: st.col || null, publisherId: st.pub || null, cursor }),
+      fetchPage: (cursor) => listBds(ctx.libId, { q: st.q, sort: st.sort, dir: st.dir || null, etat: st.etat, cote: st.cote, collectionId: st.col || null, publisherId: st.pub || null, cursor }),
       render,
       onCount: (n, done) => { countEl.textContent = st.q || st.etat || st.cote || st.col || st.pub ? `${fmtInt(n)}${done ? "" : "+"} résultat${n > 1 ? "s" : ""}` : ""; },
       empty: () => (st.q || st.etat || st.cote || st.col || st.pub)
@@ -102,12 +102,12 @@ export async function renderList(ctx) {
   form.querySelector("[data-scan]").onclick = async () => {
     const isbn = await scanIsbn();
     if (!isbn || !ctx.alive()) return;
-    const bd = await findBdByIsbn(ctx.uid, isbn).catch(() => null);
+    const bd = await findBdByIsbn(ctx.libId, isbn).catch(() => null);
     if (bd) return ctx.go(`bd/${bd.id}`);
     input.value = isbn;
     st.q = isbn;
     reload();
-    if (!ctx.readOnly && (await confirmDialog(`L’ISBN ${isbn} n’est pas dans votre bédéthèque. L’ajouter ?`, { title: "Album introuvable", ok: "Ajouter" }))) {
+    if (!ctx.readOnly && (await confirmDialog(`L’ISBN ${isbn} n’est pas dans cette bédéthèque. L’ajouter ?`, { title: "Album introuvable", ok: "Ajouter" }))) {
       ctx.go(`bd/new?isbn=${isbn}`);
     }
   };
@@ -139,7 +139,7 @@ export async function renderDetail(ctx) {
   const [id] = ctx.params;
   ctx.setTitle("Album", { back: "bds" });
   ctx.render(spinner());
-  const bd = await getBd(ctx.uid, id);
+  const bd = await getBd(ctx.libId, id);
   if (!ctx.alive()) return;
   if (!bd) return ctx.render(emptyState("Cet album n’existe plus", "Il a peut-être été supprimé.", `<a class="btn btn-primary" href="${ctx.link("bds")}">Voir les BD</a>`));
 
@@ -185,16 +185,16 @@ export async function renderDetail(ctx) {
 
   // Photo prise au téléphone : la vignette s'affiche tout de suite, la version nette arrive ensuite.
   if (bd.hasCoverPhoto) {
-    getCoverPhoto(ctx.uid, bd.id).then((full) => {
+    getCoverPhoto(ctx.libId, bd.id).then((full) => {
       const img = ctx.el.querySelector(".cover-lg img");
       if (full && img && ctx.alive()) img.src = full;
     }).catch(() => {});
   }
 
   ctx.el.querySelector("[data-del]")?.addEventListener("click", async () => {
-    if (!(await confirmDialog(`« ${bd.titre} » sera retiré de votre bédéthèque.`, { title: "Supprimer cet album ?", ok: "Supprimer", danger: true }))) return;
+    if (!(await confirmDialog(`« ${bd.titre} » sera retiré de cette bédéthèque.`, { title: "Supprimer cet album ?", ok: "Supprimer", danger: true }))) return;
     try {
-      await deleteBd(ctx.uid, bd);
+      await deleteBd(ctx.libId, bd);
       toast("Album supprimé");
       ctx.go(bd.collectionId ? `collection/${bd.collectionId}` : "bds");
     } catch (e) {

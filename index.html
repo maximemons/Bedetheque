@@ -20,6 +20,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <!-- Position de la barre de navigation (réglage du compte), appliquée avant l'affichage pour éviter un saut. -->
+  <script>try { document.documentElement.dataset.nav = localStorage.getItem("bdt:nav") === "right" ? "right" : "left"; } catch (e) {}</script>
 </head>
 <body>
 
@@ -57,6 +59,20 @@
     </div>
   </section>
 
+  <!-- Adresse e-mail à vérifier (comptes e-mail + mot de passe) -->
+  <section id="verify-screen" class="login hidden" aria-labelledby="verify-title">
+    <div class="login-inner">
+      <svg class="logo logo-lg" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#1F55C4" stroke="#16181D" stroke-width="3"/><path d="M18 41 12.5 55 30 42.5" fill="#fff" stroke="#16181D" stroke-width="3.5" stroke-linejoin="round"/><rect x="7" y="9" width="50" height="34" rx="15" fill="#fff" stroke="#16181D" stroke-width="3.5"/><path d="M19.5 41.2h6" stroke="#fff" stroke-width="3"/><g fill="none" stroke="#16181D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 17.5V34.5M18 17.5h6a4.25 4.25 0 0 1 0 8.5h-6M18 26h7a4.25 4.25 0 0 1 0 8.5h-7"/><path d="M35 17.5V34.5h4a8.5 8.5 0 0 0 0-17z"/></g></svg>
+      <h1 id="verify-title" class="login-title">Vérifiez votre e-mail</h1>
+      <p class="login-text">Vos bédéthèques sont rattachées à votre adresse e-mail. Ouvrez le lien envoyé à <strong id="verify-email"></strong>, puis revenez ici.</p>
+      <button id="btn-verified" class="btn btn-primary" type="button">J’ai cliqué sur le lien</button>
+      <button id="btn-resend" class="btn btn-ghost" type="button">Renvoyer l’e-mail</button>
+      <button id="btn-verify-logout" class="link-btn" type="button">Se déconnecter</button>
+      <p id="verify-error" class="login-msg login-error hidden" role="alert"></p>
+      <p id="verify-info" class="login-msg login-info hidden" role="status"></p>
+    </div>
+  </section>
+
   <!-- Application -->
   <div id="app" class="hidden">
     <header class="topbar">
@@ -68,6 +84,11 @@
         <h1 id="topbar-title">Bédéthèque</h1>
       </div>
       <div id="topbar-actions" class="topbar-actions"></div>
+      <button id="lib-switch" class="lib-switch hidden" type="button" aria-haspopup="dialog" aria-label="Changer de bédéthèque">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M5 20V6h3v14M10 20V4h3v16M15.5 6.5l3-.8 3.4 13.5"/></svg>
+        <span id="lib-switch-name" class="lib-switch-name"></span>
+        <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
     </header>
 
     <div id="share-banner" class="share-banner hidden" role="note"></div>
@@ -77,6 +98,7 @@
     <button id="fab" class="fab hidden" type="button"></button>
 
     <nav class="tabbar" aria-label="Navigation principale">
+      <div class="tabbar-brand" aria-hidden="true"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#1F55C4" stroke="#16181D" stroke-width="3"/><path d="M18 41 12.5 55 30 42.5" fill="#fff" stroke="#16181D" stroke-width="3.5" stroke-linejoin="round"/><rect x="7" y="9" width="50" height="34" rx="15" fill="#fff" stroke="#16181D" stroke-width="3.5"/><path d="M19.5 41.2h6" stroke="#fff" stroke-width="3"/><g fill="none" stroke="#16181D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 17.5V34.5M18 17.5h6a4.25 4.25 0 0 1 0 8.5h-6M18 26h7a4.25 4.25 0 0 1 0 8.5h-7"/><path d="M35 17.5V34.5h4a8.5 8.5 0 0 0 0-17z"/></g></svg><span>Bédéthèque</span></div>
       <a data-tab="home" data-path=""><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a>
       <a data-tab="bds" data-path="bds"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="5" height="16" rx="1"/><rect x="9" y="4" width="5" height="16" rx="1"/><path d="M15.2 5.4 19 4.4l3.4 14.4-3.8 1z"/></svg><span>BD</span></a>
       <a data-tab="collections" data-path="collections"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg><span>Collections</span></a>

@@ -1,85 +1,145 @@
 import {
-  updateUserDoc, getUserDoc, recomputeCounters,
-  listMembers, removeMember, renameMember, createInvite, listInvites, deleteInvite, myLibraries
+  recomputeCounters, saveAccount, renameLibrary, saveLibraryHome, setLibraryShared, deleteLibrary,
+  libraryMembers, addMember, removeMember, setMemberRole, renameMember, normEmail, ROLES, MAX_MEMBERS
 } from "../db.js";
 import { logout } from "../auth.js";
-import { refreshOwnerDoc, forgetLibrary } from "../app.js";
+import {
+  refreshLibraries, patchLibrary, rerender, myLibraries, createLibraryAndOpen, setAccountLocal, applyNavPosition
+} from "../app.js";
 import { HOME_WIDGETS, DEFAULT_HOME } from "../constants.js";
 import { esc } from "../utils.js";
 import { icon, toast, confirmDialog, promptDialog, errorHtml } from "../ui.js";
-import { spinner } from "../components.js";
 
 const appUrl = () => `${location.origin}${location.pathname}`;
-const inviteUrl = (ownerUid, code) => `${appUrl()}#/rejoindre/${ownerUid}/${code}`;
-const fmtDay = (ts) => ts?.toDate ? ts.toDate().toLocaleDateString("fr-FR") : "";
+const fmtDay = (ts) => (ts?.toDate ? ts.toDate().toLocaleDateString("fr-FR") : "");
+const PROVIDERS = { "google.com": "Google", password: "e-mail et mot de passe", emailLink: "lien e-mail" };
 
 /**
- * Mon compte.
- * - Propriétaire (#/compte) : connexion, bédéthèques, nom affiché, co-propriétaires (inviter, retirer),
- *   page d'accueil, partage en lecture seule, données.
- * - Co-propriétaire (#/b/<uid>/compte) : connexion, bédéthèques, co-propriétaires (voir, quitter), données.
+ * Compte (#/b/<bédéthèque>/compte), en deux parties :
+ * - mon compte : connexion, nom par défaut, affichage (position de la barre), mes bédéthèques ;
+ *   réglages liés à l'adresse e-mail, communs à toutes les bédéthèques ;
+ * - la bédéthèque ouverte : nom, membres, page d'accueil, partage, données, suppression.
  */
 export async function render(ctx) {
+  const u = ctx.user;
+  const lib = ctx.lib;
   const isOwner = ctx.role === "owner";
-  ctx.setTitle(isOwner ? "Mon compte" : "Compte");
-  ctx.render(spinner());
-  const profile = isOwner
-    ? (await getUserDoc(ctx.uid).catch(() => null)) || ctx.profile || {}
-    : ctx.profile || {};
-  if (!ctx.alive()) return;
+  const account = ctx.account || {};
+  const members = libraryMembers(lib);
+  const owners = members.filter((m) => m.role === "owner");
+  const libs = myLibraries();
 
-  const home = { ...DEFAULT_HOME, ...(profile.home || {}) };
-  // Ajoute les blocs apparus depuis le dernier réglage
+  ctx.setTitle("Compte", { kicker: lib.name });
+
+  const home = { ...DEFAULT_HOME, ...(lib.home || {}) };
   const widgets = [...home.widgets.filter((w) => HOME_WIDGETS.some((h) => h.id === w.id))];
   for (const h of HOME_WIDGETS) if (!widgets.some((w) => w.id === h.id)) widgets.push({ id: h.id, on: false });
 
-  const shareUrl = `${appUrl()}#/p/${ctx.uid}`;
-  const u = ctx.user;
-  const provider = u.providerData?.[0]?.providerId === "google.com" ? "Google" : "e-mail";
+  const shareUrl = `${appUrl()}#/p/${lib.id}`;
+  const providers = [...new Set((u.providerData || []).map((p) => PROVIDERS[p.providerId] || p.providerId))];
+  const nav = account.navPosition === "right" ? "right" : "left";
+
+  const libRow = (l) => {
+    const role = l.members?.[ctx.key]?.role === "owner" ? "owner" : "editor";
+    const n = l.memberKeys?.length || 1;
+    return `<li class="${l.id === lib.id ? "current" : ""}">
+      <a class="who" href="#/b/${esc(l.id)}/"><strong>${esc(l.name)}</strong>
+        <small>${n > 1 ? `${n} membres` : "Vous seul"}${l.shared ? " · partagée par lien" : ""}</small></a>
+      <span class="role role-${role === "owner" ? "owner" : "coowner"}">${ROLES[role]}</span></li>`;
+  };
+
+  const memberRow = (m) => {
+    const me = m.key === ctx.key;
+    let actions = "";
+    if (isOwner && !me) {
+      actions = `
+        <select class="role-select" data-role="${esc(m.key)}" aria-label="Rôle de ${esc(m.name)}">
+          ${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${k === m.role ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
+        <button class="icon-btn" type="button" data-remove="${esc(m.key)}" data-name="${esc(m.name)}" aria-label="Retirer ${esc(m.name)}">${icon("trash")}</button>`;
+    } else {
+      actions = `<span class="role role-${m.role === "owner" ? "owner" : "coowner"}">${ROLES[m.role] || ROLES.editor}</span>`;
+    }
+    if (me) actions += `<button class="icon-btn" type="button" data-rename="${esc(m.name)}" aria-label="Modifier mon nom affiché">${icon("edit")}</button>`;
+    return `<li>
+      <span class="who"><strong>${esc(m.name)}</strong><small>${me ? "Vous · " : ""}${m.addedAt ? `depuis le ${esc(fmtDay(m.addedAt))}` : ""}</small></span>
+      ${actions}
+    </li>`;
+  };
+  const me = members.find((m) => m.key === ctx.key);
+  const canLeave = !!me && (me.role !== "owner" || owners.length > 1);
 
   ctx.render(`
+    <h2 class="section-title">${icon("user")} Mon compte</h2>
+
     <section class="panel">
       <h2>Connexion</h2>
       <p>${esc(u.displayName || u.email || "")}${u.displayName && u.email ? `<br><span class="muted">${esc(u.email)}</span>` : ""}</p>
-      <p class="muted">Connecté avec ${provider}. Ces informations ne sont visibles que par vous.</p>
-      <button class="btn btn-ghost" type="button" data-logout>${icon("logout")}Se déconnecter</button>
+      <p class="muted">Connecté avec ${esc(providers.join(", ") || "e-mail")}. Vos bédéthèques sont rattachées à votre adresse e-mail : que vous vous connectiez avec Google ou avec e-mail et mot de passe, vous retrouvez les mêmes dès lors que l’adresse est la même.</p>
+      <label class="field"><span>Nom affiché par défaut</span>
+        <input name="pseudo" value="${esc(account.pseudo)}" maxlength="40" placeholder="Ex. Camille"></label>
+      <p class="hint">Utilisé quand vous créez une bédéthèque. Votre adresse e-mail n’est jamais montrée aux autres membres.</p>
+      <div class="row-actions">
+        <button class="btn btn-primary" type="button" data-save-pseudo>Enregistrer le nom</button>
+        <button class="btn btn-ghost" type="button" data-logout>${icon("logout")}Se déconnecter</button>
+      </div>
     </section>
 
-    <section class="panel hidden" data-libraries-panel>
-      <h2>Mes bédéthèques</h2>
-      <ul class="member-list" data-libraries></ul>
-    </section>
-
-    ${isOwner ? `
     <section class="panel">
-      <h2>Nom affiché</h2>
-      <label class="field"><span>Votre nom, montré aux co-propriétaires et aux visiteurs du partage</span>
-        <input name="shareName" value="${esc(profile.shareName)}" maxlength="40" placeholder="Ex. Camille"></label>
-      <p class="hint">Obligatoire pour inviter des co-propriétaires. Votre e-mail n’est jamais montré.</p>
-      <button class="btn btn-primary" type="button" data-save-name>Enregistrer le nom</button>
-    </section>` : ""}
-
-    <section class="panel">
-      <h2>${icon("users")} Co-propriétaires</h2>
-      <p class="hint">${isOwner
-        ? "Les co-propriétaires ont accès à toute la bédéthèque : ils ajoutent, modifient et suppriment albums, collections et éditeurs, et peuvent importer. Vous seul réglez le partage public, l’accueil et cette liste."
-        : `Vous avez accès à toute cette bédéthèque. Seul le propriétaire règle le partage public, la page d’accueil et la liste des co-propriétaires.`}</p>
-      <ul class="member-list" data-members>${spinner()}</ul>
-      ${isOwner ? `
-        <button class="btn btn-primary" type="button" data-invite>${icon("plus")}Inviter un co-propriétaire</button>
-        <div class="share-link hidden" data-invite-box>
-          <input readonly aria-label="Lien d’invitation">
-          <button class="btn btn-ghost" type="button" data-copy-invite>${icon("link")}Copier</button>
-          ${navigator.share ? `<button class="btn btn-ghost" type="button" data-share-invite>${icon("share")}Envoyer</button>` : ""}
+      <h2>${icon("sidebar")} Affichage</h2>
+      <fieldset class="field"><legend>Barre de navigation sur ordinateur et tablette</legend>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="navPosition" value="left" ${nav === "left" ? "checked" : ""}><span>À gauche</span></label>
+          <label><input type="radio" name="navPosition" value="right" ${nav === "right" ? "checked" : ""}><span>À droite</span></label>
         </div>
-        <p class="hint">Chaque lien d’invitation ne sert qu’à une seule personne et expire au bout de 7 jours. La personne doit se connecter (ou créer un compte) pour l’accepter.</p>
-        <div data-invites></div>` : ""}
+      </fieldset>
+      <p class="hint">Réglage de votre compte, valable pour toutes vos bédéthèques et sur tous vos appareils. Sur téléphone, la barre reste toujours en bas de l’écran.</p>
+    </section>
+
+    <section class="panel">
+      <h2>${icon("shelf")} Mes bédéthèques</h2>
+      <ul class="member-list">${libs.map(libRow).join("")}</ul>
+      <button class="btn btn-primary" type="button" data-new-lib>${icon("plus")}Nouvelle bédéthèque</button>
+      <p class="hint">Vous pouvez en avoir autant que vous voulez : une personnelle, une partagée avec votre conjoint… Le bouton en haut de l’écran permet de passer de l’une à l’autre.</p>
+    </section>
+
+    <h2 class="section-title">${icon("books")} ${esc(lib.name)}</h2>
+
+    <section class="panel">
+      <h2>Nom de la bédéthèque</h2>
+      ${isOwner ? `
+        <label class="field"><span>Nom, visible par tous les membres${lib.shared ? " et par les visiteurs du lien de partage" : ""}</span>
+          <input name="libName" value="${esc(lib.name)}" maxlength="40" required></label>
+        <button class="btn btn-primary" type="button" data-rename-lib>Renommer</button>`
+      : `<p><strong>${esc(lib.name)}</strong></p><p class="hint">Seul un propriétaire peut la renommer.</p>`}
+    </section>
+
+    <section class="panel">
+      <h2>${icon("users")} Membres</h2>
+      <p class="hint">${isOwner
+        ? "Les co-propriétaires ont accès à toute la bédéthèque : ils ajoutent, modifient et suppriment albums, collections et éditeurs, et peuvent importer. Les propriétaires règlent en plus le nom, les membres, l’accueil et le partage."
+        : "Vous avez accès à toute cette bédéthèque. Seuls les propriétaires règlent son nom, ses membres, l’accueil et le partage."}</p>
+      <ul class="member-list" data-members>${members.map(memberRow).join("")}</ul>
+      ${canLeave ? `<button class="btn btn-danger-ghost" type="button" data-leave>Quitter cette bédéthèque</button>` : ""}
+      ${isOwner ? `
+        <form class="form add-member" data-add-member novalidate>
+          <h3>Ajouter un membre</h3>
+          <div class="cols-2">
+            <label class="field col-wide"><span>Adresse e-mail</span><input name="email" type="email" autocomplete="off" required placeholder="prenom@exemple.fr"></label>
+            <label class="field"><span>Rôle</span><select name="role">
+              <option value="editor">${ROLES.editor}</option><option value="owner">${ROLES.owner}</option></select></label>
+          </div>
+          <label class="field"><span>Nom affiché aux membres</span><input name="name" maxlength="40" required placeholder="Ex. Julie"></label>
+          <button class="btn btn-primary" type="submit" ${members.length >= MAX_MEMBERS ? "disabled" : ""}>${icon("plus")}Ajouter</button>
+          <p class="hint">La personne verra cette bédéthèque dès qu’elle se connectera avec cette adresse (Google, e-mail et mot de passe, ou lien de connexion). L’adresse n’est pas enregistrée en clair : seule son empreinte l’est, ce qui permet de la reconnaître sans la conserver. ${MAX_MEMBERS} membres au plus.</p>
+          <div class="notice hidden" data-added></div>
+        </form>` : ""}
     </section>
 
     ${isOwner ? `
     <section class="panel">
       <h2>Page d’accueil</h2>
-      <p class="hint">Choisissez les blocs affichés et leur ordre. Le réglage vaut aussi pour vos co-propriétaires et les visiteurs.</p>
+      <p class="hint">Choisissez les blocs affichés et leur ordre. Le réglage vaut pour tous les membres de cette bédéthèque et pour les visiteurs.</p>
       <ul class="widget-list" data-widgets></ul>
       <label class="field inline"><span>Albums dans « Derniers achats » et « Derniers ajouts »</span>
         <select name="recentCount">${[4, 6, 8, 12, 16].map((n) => `<option ${n === home.recentCount ? "selected" : ""}>${n}</option>`).join("")}</select></label>
@@ -88,13 +148,13 @@ export async function render(ctx) {
 
     <section class="panel">
       <h2>Partage en lecture seule</h2>
-      <label class="check"><input type="checkbox" name="shareEnabled" ${profile.shareEnabled ? "checked" : ""}><span>Partager ma bédéthèque avec un lien</span></label>
-      <p class="hint">Toute personne qui a le lien voit vos albums, collections et éditeurs, y compris l’état, la cote, les photos et les notes. Elle ne peut rien modifier. Pour donner le droit de modifier, invitez plutôt un co-propriétaire.</p>
-      <div class="share-link ${profile.shareEnabled ? "" : "hidden"}" data-share-link>
+      <label class="check"><input type="checkbox" name="shareEnabled" ${lib.shared ? "checked" : ""}><span>Partager cette bédéthèque avec un lien</span></label>
+      <p class="hint">Toute personne qui a le lien voit ses albums, collections et éditeurs, y compris l’état, la cote, les photos et les notes, sans pouvoir rien modifier. Le nom des membres n’est pas montré. Pour donner le droit de modifier, ajoutez plutôt un membre.</p>
+      <div class="share-link ${lib.shared ? "" : "hidden"}" data-share-link>
         <input readonly value="${esc(shareUrl)}" aria-label="Lien de partage">
         <button class="btn btn-ghost" type="button" data-copy>${icon("link")}Copier</button>
         ${navigator.share ? `<button class="btn btn-ghost" type="button" data-native-share>${icon("share")}Partager</button>` : ""}
-        <a class="btn btn-ghost" href="#/p/${esc(ctx.uid)}">${icon("eye")}Voir comme un visiteur</a>
+        <a class="btn btn-ghost" href="#/p/${esc(lib.id)}">${icon("eye")}Voir comme un visiteur</a>
       </div>
       <button class="btn btn-primary" type="button" data-save-share>Enregistrer le partage</button>
     </section>` : ""}
@@ -107,136 +167,118 @@ export async function render(ctx) {
       </div>
       <p class="hint">Les compteurs (nombre de BD, albums par collection…) se tiennent à jour tout seuls. Recalculez-les après un import interrompu ou si un chiffre vous semble faux.</p>
       <p class="muted" data-recompute-msg aria-live="polite"></p>
-    </section>`);
+    </section>
+
+    ${isOwner ? `
+    <section class="panel danger-panel">
+      <h2>Supprimer la bédéthèque</h2>
+      <p class="hint">Supprime « ${esc(lib.name)} » pour tous ses membres, avec tous ses albums, collections, éditeurs et photos. C’est définitif. Coût : environ 1 écriture par album.</p>
+      <button class="btn btn-danger-ghost" type="button" data-delete-lib>${icon("trash")}Supprimer « ${esc(lib.name)} »</button>
+      <p class="muted" data-delete-msg aria-live="polite"></p>
+    </section>` : ""}`);
 
   const $in = (sel) => ctx.el.querySelector(sel);
-
-  // ---- Mes bédéthèques (la mienne + celles dont je suis co-propriétaire)
-  myLibraries(u.uid).then((libs) => {
-    if (!ctx.alive()) return;
-    if (!libs.length && isOwner) return; // rien à choisir
-    const current = isOwner ? u.uid : ctx.uid;
-    const row = (href, uid, name, role, sub) => `
-      <li class="${uid === current ? "current" : ""}">
-        <a class="who" href="${href}"><strong>${esc(name)}</strong>${sub ? `<small>${esc(sub)}</small>` : ""}</a>
-        <span class="role role-${role}">${role === "owner" ? "Propriétaire" : "Co-propriétaire"}</span>
-      </li>`;
-    $in("[data-libraries]").innerHTML =
-      row("#/", u.uid, "Ma bédéthèque", "owner", "") +
-      libs.map((l) => row(`#/b/${l.ownerUid}/`, l.ownerUid, l.ownerName ? `Bédéthèque de ${l.ownerName}` : "Bédéthèque partagée", "coowner", l.myName ? `Vous y apparaissez comme « ${l.myName} »` : "")).join("");
-    $in("[data-libraries-panel]").classList.remove("hidden");
-  }).catch((e) => console.warn("Bédéthèques partagées", e));
-
-  // ---- Co-propriétaires
-  const membersUl = $in("[data-members]");
-  const drawMembers = async () => {
-    let members;
-    try { members = await listMembers(ctx.uid); }
-    catch (e) { if (ctx.alive()) membersUl.innerHTML = `<li>${errorHtml(e)}</li>`; return; }
-    if (!ctx.alive()) return;
-    const ownerName = (isOwner ? $in("[name=shareName]")?.value.trim() : profile.shareName) || "";
-    const ownerRow = `<li>
-      <span class="who"><strong>${esc(ownerName || (isOwner ? "Vous" : "Propriétaire"))}</strong>${isOwner ? "<small>Vous</small>" : ""}</span>
-      <span class="role role-owner">Propriétaire</span></li>`;
-    membersUl.innerHTML = ownerRow + members.map((m) => {
-      const me = m.uid === u.uid;
-      const action = isOwner
-        ? `<button class="icon-btn" type="button" data-remove="${esc(m.uid)}" data-name="${esc(m.name)}" aria-label="Retirer ${esc(m.name)}">${icon("trash")}</button>`
-        : me ? `<button class="icon-btn" type="button" data-rename data-name="${esc(m.name)}" aria-label="Modifier mon nom">${icon("edit")}</button>` : "";
-      return `<li>
-        <span class="who"><strong>${esc(m.name)}</strong><small>${me ? "Vous · " : ""}depuis le ${esc(fmtDay(m.joinedAt))}</small></span>
-        <span class="role role-coowner">Co-propriétaire</span>${action}</li>`;
-    }).join("") + (!isOwner ? `<li><button class="btn btn-danger-ghost" type="button" data-leave>Quitter cette bédéthèque</button></li>` : "");
-    if (isOwner && !members.length) membersUl.insertAdjacentHTML("beforeend", `<li class="muted">Aucun co-propriétaire pour l’instant.</li>`);
+  const after = async (msg) => {
+    if (msg) toast(msg);
+    await refreshLibraries().catch(() => {});
+    rerender();
   };
-  drawMembers();
 
-  membersUl.addEventListener("click", async (e) => {
+  // ---- Mon compte
+  $in("[data-save-pseudo]").onclick = async () => {
+    const pseudo = $in("[name=pseudo]").value.trim();
+    try { await saveAccount(ctx.key, { pseudo }); setAccountLocal({ pseudo }); toast("Nom enregistré"); }
+    catch (e) { toast(e.message, "error"); }
+  };
+  $in("[data-logout]").onclick = async () => {
+    if (await confirmDialog("Vous devrez vous reconnecter pour voir vos bédéthèques.", { title: "Se déconnecter ?", ok: "Se déconnecter" })) {
+      await logout();
+      location.hash = "#/";
+    }
+  };
+
+  // ---- Affichage : position de la barre, appliquée tout de suite
+  ctx.el.querySelectorAll("[name=navPosition]").forEach((r) => r.addEventListener("change", async () => {
+    const navPosition = r.value === "right" ? "right" : "left";
+    applyNavPosition(navPosition);
+    setAccountLocal({ navPosition });
+    try { await saveAccount(ctx.key, { navPosition }); toast(navPosition === "right" ? "Barre à droite" : "Barre à gauche"); }
+    catch (e) { toast(e.message, "error"); }
+  }));
+
+  // ---- Mes bédéthèques
+  $in("[data-new-lib]").onclick = () => createLibraryAndOpen();
+
+  // ---- Nom de la bédéthèque
+  $in("[data-rename-lib]")?.addEventListener("click", async () => {
+    const input = $in("[name=libName]");
+    try {
+      const name = await renameLibrary(lib, input.value);
+      patchLibrary(lib.id, { name });
+      after("Bédéthèque renommée");
+    } catch (e) { toast(e.message, "error"); input.focus(); }
+  });
+
+  // ---- Membres
+  $in("[data-members]").addEventListener("click", async (e) => {
     const rm = e.target.closest("[data-remove]");
     if (rm) {
-      if (!(await confirmDialog(`${rm.dataset.name} n’aura plus accès à votre bédéthèque. Ce qu’il ou elle a ajouté reste en place.`, { title: "Retirer ce co-propriétaire ?", ok: "Retirer", danger: true }))) return;
-      try { await removeMember(ctx.uid, rm.dataset.remove); toast("Co-propriétaire retiré"); drawMembers(); }
+      if (!(await confirmDialog(`${rm.dataset.name} n’aura plus accès à « ${lib.name} ». Ce qu’il ou elle a ajouté reste en place.`, { title: "Retirer ce membre ?", ok: "Retirer", danger: true }))) return;
+      try { await removeMember(lib.id, rm.dataset.remove); after("Membre retiré"); }
       catch (err) { toast(err.message, "error"); }
       return;
     }
     const rn = e.target.closest("[data-rename]");
     if (rn) {
-      const name = await promptDialog("Le nom que voient le propriétaire et les autres co-propriétaires.", { title: "Votre nom affiché", value: rn.dataset.name, placeholder: "Ex. Camille" });
+      const name = await promptDialog("Le nom que voient les autres membres de cette bédéthèque.", { title: "Votre nom affiché", value: rn.dataset.rename, placeholder: "Ex. Camille" });
       if (!name?.trim()) return;
-      try { await renameMember(ctx.uid, u.uid, name); forgetLibrary(ctx.uid); toast("Nom modifié"); drawMembers(); }
-      catch (err) { toast(err.message, "error"); }
-      return;
-    }
-    if (e.target.closest("[data-leave]")) {
-      if (!(await confirmDialog("Vous n’aurez plus accès à cette bédéthèque, sauf nouvelle invitation du propriétaire.", { title: "Quitter cette bédéthèque ?", ok: "Quitter", danger: true }))) return;
-      try { await removeMember(ctx.uid, u.uid); forgetLibrary(ctx.uid); toast("Vous avez quitté la bédéthèque"); location.hash = "#/"; }
+      try { await renameMember(lib.id, ctx.key, name); after("Nom modifié"); }
       catch (err) { toast(err.message, "error"); }
     }
   });
+  $in("[data-members]").addEventListener("change", async (e) => {
+    const sel = e.target.closest("[data-role]");
+    if (!sel) return;
+    try { await setMemberRole(lib.id, sel.dataset.role, sel.value); after("Rôle modifié"); }
+    catch (err) { toast(err.message, "error"); }
+  });
+  $in("[data-leave]")?.addEventListener("click", async () => {
+    if (!(await confirmDialog(`Vous n’aurez plus accès à « ${lib.name} », sauf si un propriétaire vous ajoute de nouveau.`, { title: "Quitter cette bédéthèque ?", ok: "Quitter", danger: true }))) return;
+    try {
+      await removeMember(lib.id, ctx.key);
+      await refreshLibraries().catch(() => {});
+      toast("Vous avez quitté la bédéthèque");
+      location.hash = "#/";
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  const addForm = $in("[data-add-member]");
+  addForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = normEmail(addForm.elements.email.value);
+    const name = addForm.elements.name.value.trim();
+    if (!email || !name) { toast("Indiquez l’adresse e-mail et le nom affiché.", "error"); return; }
+    const btn = addForm.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await addMember(lib, email, name, addForm.elements.role.value);
+      await refreshLibraries().catch(() => {});
+      // L'adresse ne reste que dans cette page, le temps de prévenir la personne.
+      const subject = encodeURIComponent(`Bédéthèque « ${lib.name} »`);
+      const body = encodeURIComponent(`Bonjour,\n\nJe t’ai ajouté(e) à la bédéthèque « ${lib.name} ».\nConnecte-toi avec cette adresse e-mail pour la retrouver :\n${appUrl()}\n`);
+      const box = $in("[data-added]");
+      box.innerHTML = `<p><strong>${esc(name)}</strong> est maintenant membre.</p>
+        <a class="btn btn-ghost" href="mailto:${esc(email)}?subject=${subject}&body=${body}">${icon("mail")}Prévenir par e-mail</a>`;
+      box.classList.remove("hidden");
+      addForm.elements.email.value = "";
+      addForm.elements.name.value = "";
+      $in("[data-members]").innerHTML = libraryMembers(myLibraries().find((l) => l.id === lib.id) || lib).map(memberRow).join("");
+      toast("Membre ajouté");
+    } catch (err) { toast(err.message, "error"); }
+    finally { btn.disabled = false; }
+  });
 
   if (isOwner) {
-    // ---- Invitations en attente
-    const invitesBox = $in("[data-invites]");
-    const drawInvites = async () => {
-      const list = await listInvites(ctx.uid).catch(() => []);
-      if (!ctx.alive()) return;
-      invitesBox.innerHTML = list.length ? `
-        <p class="muted">Invitation${list.length > 1 ? "s" : ""} en attente</p>
-        <ul class="member-list">${list.map((i) => `<li>
-          <span class="who"><strong>Lien d’invitation</strong><small>valable jusqu’au ${esc(fmtDay(i.expiresAt))}</small></span>
-          <button class="icon-btn" type="button" data-copy-code="${esc(i.id)}" aria-label="Copier le lien">${icon("link")}</button>
-          <button class="icon-btn" type="button" data-cancel-code="${esc(i.id)}" aria-label="Annuler l’invitation">${icon("close")}</button>
-        </li>`).join("")}</ul>` : "";
-    };
-    drawInvites();
-    invitesBox.addEventListener("click", async (e) => {
-      const cp = e.target.closest("[data-copy-code]");
-      if (cp) {
-        try { await navigator.clipboard.writeText(inviteUrl(ctx.uid, cp.dataset.copyCode)); toast("Lien copié"); }
-        catch { toast("Copie impossible", "error"); }
-      }
-      const cancel = e.target.closest("[data-cancel-code]");
-      if (cancel) {
-        try { await deleteInvite(ctx.uid, cancel.dataset.cancelCode); toast("Invitation annulée"); drawInvites(); $in("[data-invite-box]").classList.add("hidden"); }
-        catch (err) { toast(err.message, "error"); }
-      }
-    });
-
-    const inviteBox = $in("[data-invite-box]");
-    const inviteInput = inviteBox.querySelector("input");
-    $in("[data-invite]").onclick = async (e) => {
-      const ownerName = profile.shareName?.trim();
-      if (!ownerName) {
-        toast("Indiquez et enregistrez d’abord votre nom affiché.", "error");
-        $in("[name=shareName]").focus();
-        return;
-      }
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      try {
-        const inv = await createInvite(ctx.uid, ownerName);
-        inviteInput.value = inviteUrl(ctx.uid, inv.id);
-        inviteBox.classList.remove("hidden");
-        inviteInput.select();
-        drawInvites();
-      } catch (err) { toast(err.message, "error"); }
-      finally { btn.disabled = false; }
-    };
-    $in("[data-copy-invite]").onclick = async () => {
-      try { await navigator.clipboard.writeText(inviteInput.value); toast("Lien copié"); }
-      catch { inviteInput.select(); }
-    };
-    $in("[data-share-invite]")?.addEventListener("click", () => {
-      navigator.share({ title: "Rejoins ma bédéthèque", text: "Deviens co-propriétaire de ma bédéthèque :", url: inviteInput.value }).catch(() => {});
-    });
-
-    // ---- Nom affiché
-    $in("[data-save-name]").onclick = async () => {
-      const data = { shareName: $in("[name=shareName]").value.trim() };
-      try { await updateUserDoc(ctx.uid, data); refreshOwnerDoc(data); profile.shareName = data.shareName; toast("Nom enregistré"); drawMembers(); }
-      catch (e) { toast(e.message, "error"); }
-    };
-
     // ---- Blocs de l'accueil
     const ul = $in("[data-widgets]");
     const drawWidgets = () => {
@@ -259,8 +301,8 @@ export async function render(ctx) {
     ul.addEventListener("change", (e) => { if (e.target.dataset.i) widgets[+e.target.dataset.i].on = e.target.checked; });
 
     $in("[data-save-home]").onclick = async () => {
-      const data = { home: { widgets, recentCount: +$in("[name=recentCount]").value } };
-      try { await updateUserDoc(ctx.uid, data); refreshOwnerDoc(data); toast("Accueil enregistré"); }
+      const homeData = { widgets, recentCount: +$in("[name=recentCount]").value };
+      try { await saveLibraryHome(lib, homeData); patchLibrary(lib.id, { home: homeData }); toast("Accueil enregistré"); }
       catch (e) { toast(e.message, "error"); }
     };
 
@@ -268,12 +310,13 @@ export async function render(ctx) {
     const shareBox = $in("[data-share-link]");
     const shareCheck = $in("[name=shareEnabled]");
     $in("[data-save-share]").onclick = async () => {
-      const data = { shareEnabled: shareCheck.checked };
+      const enabled = shareCheck.checked;
       try {
-        await updateUserDoc(ctx.uid, data);
-        refreshOwnerDoc(data);
-        shareBox.classList.toggle("hidden", !data.shareEnabled);
-        toast(data.shareEnabled ? "Partage activé" : "Partage désactivé");
+        await setLibraryShared(lib, enabled);
+        patchLibrary(lib.id, { shared: enabled });
+        lib.shared = enabled;
+        shareBox.classList.toggle("hidden", !enabled);
+        toast(enabled ? "Partage activé" : "Partage désactivé");
       } catch (e) { toast(e.message, "error"); }
     };
     $in("[data-copy]").onclick = async () => {
@@ -281,8 +324,28 @@ export async function render(ctx) {
       catch { shareBox.querySelector("input").select(); }
     };
     $in("[data-native-share]")?.addEventListener("click", () => {
-      navigator.share({ title: "Ma bédéthèque", url: shareUrl }).catch(() => {});
+      navigator.share({ title: lib.name, url: shareUrl }).catch(() => {});
     });
+
+    // ---- Suppression
+    $in("[data-delete-lib]").onclick = async (e) => {
+      const typed = await promptDialog(`Pour confirmer, tapez le nom de la bédéthèque : ${lib.name}`, { title: "Supprimer la bédéthèque ?", ok: "Supprimer définitivement" });
+      if (typed === null) return;
+      if (typed.trim() !== lib.name.trim()) { toast("Le nom ne correspond pas : rien n’a été supprimé.", "error"); return; }
+      const btn = e.currentTarget;
+      const msg = $in("[data-delete-msg]");
+      btn.disabled = true;
+      try {
+        await deleteLibrary(lib, (n) => { msg.textContent = `${n} document${n > 1 ? "s" : ""} supprimé${n > 1 ? "s" : ""}…`; });
+        await refreshLibraries().catch(() => {});
+        toast(`« ${lib.name} » supprimée`);
+        if (!myLibraries().length) location.reload(); // une nouvelle bédéthèque sera créée
+        else location.hash = "#/";
+      } catch (err) {
+        msg.innerHTML = errorHtml(err);
+        btn.disabled = false;
+      }
+    };
   }
 
   // ---- Données
@@ -292,19 +355,12 @@ export async function render(ctx) {
     const msg = $in("[data-recompute-msg]");
     btn.disabled = true;
     try {
-      const r = await recomputeCounters(ctx.uid, (t) => { msg.textContent = t; });
+      const r = await recomputeCounters(ctx.libId, (t) => { msg.textContent = t; });
       msg.textContent = r.fixed ? `Terminé : ${r.fixed} compteur${r.fixed > 1 ? "s" : ""} corrigé${r.fixed > 1 ? "s" : ""}.` : "Terminé : tout était juste.";
     } catch (err) {
       msg.innerHTML = errorHtml(err);
     } finally {
       btn.disabled = false;
-    }
-  };
-
-  $in("[data-logout]").onclick = async () => {
-    if (await confirmDialog("Vous devrez vous reconnecter pour voir votre bédéthèque.", { title: "Se déconnecter ?", ok: "Se déconnecter" })) {
-      await logout();
-      location.hash = "#/";
     }
   };
 }

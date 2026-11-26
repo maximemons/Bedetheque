@@ -29,7 +29,7 @@ export async function renderList(ctx) {
     history.replaceState(null, "", ctx.link("editeurs") + (p.toString() ? "?" + p : ""));
     pager = createPager({
       list,
-      fetchPage: (cursor) => listPublishers(ctx.uid, { q: st.q, sort: st.sort, cursor }),
+      fetchPage: (cursor) => listPublishers(ctx.libId, { q: st.q, sort: st.sort, cursor }),
       render: (p) => publisherRow(p, ctx.link(`editeur/${p.id}`)),
       empty: () => st.q ? emptyState("Aucun éditeur ne correspond") : emptyState("Pas encore d’éditeur", ctx.readOnly ? "" : "Ils se créent tout seuls quand vous ajoutez des albums.")
     });
@@ -47,7 +47,7 @@ export async function renderDetail(ctx) {
   const [id] = ctx.params;
   ctx.setTitle("Éditeur", { back: "editeurs" });
   ctx.render(spinner());
-  const pub = await getPublisher(ctx.uid, id);
+  const pub = await getPublisher(ctx.libId, id);
   if (!ctx.alive()) return;
   if (!pub) return ctx.render(emptyState("Cet éditeur n’existe plus", "", `<a class="btn btn-primary" href="${ctx.link("editeurs")}">Voir les éditeurs</a>`));
   ctx.setTitle(pub.name, { back: "editeurs" });
@@ -64,7 +64,7 @@ export async function renderDetail(ctx) {
     <div data-after></div>`);
   const pager = createPager({
     list: ctx.el.querySelector("[data-list]"),
-    fetchPage: (cursor) => listCollections(ctx.uid, { publisherId: id, cursor }),
+    fetchPage: (cursor) => listCollections(ctx.libId, { publisherId: id, cursor }),
     render: (c) => collectionRow(c, ctx.link(`collection/${c.id}`)),
     empty: () => emptyState("Aucune collection chez cet éditeur")
   });
@@ -76,7 +76,7 @@ export async function renderDetail(ctx) {
     after.querySelector("button").onclick = async () => {
       if (!(await confirmDialog(`L’éditeur « ${pub.name} » sera supprimé.`, { title: "Supprimer l’éditeur ?", ok: "Supprimer", danger: true }))) return;
       try {
-        await deletePublisher(ctx.uid, pub);
+        await deletePublisher(ctx.libId, pub);
         toast("Éditeur supprimé");
         ctx.go("editeurs");
       } catch (e) {
@@ -92,7 +92,7 @@ export async function renderForm(ctx) {
   let pub = null;
   if (id) {
     ctx.render(spinner());
-    pub = await getPublisher(ctx.uid, id);
+    pub = await getPublisher(ctx.libId, id);
     if (!ctx.alive()) return;
     if (!pub) return ctx.render(emptyState("Cet éditeur n’existe plus"));
   }
@@ -109,7 +109,7 @@ export async function renderForm(ctx) {
     const btn = form.querySelector("[type=submit]");
     btn.disabled = true;
     try {
-      const newId = await savePublisher(ctx.uid, { name: form.elements.name.value, notes: form.elements.notes.value }, pub);
+      const newId = await savePublisher(ctx.libId, { name: form.elements.name.value, notes: form.elements.notes.value }, pub);
       toast(pub ? "Éditeur enregistré" : "Éditeur créé");
       ctx.go(`editeur/${newId}`);
     } catch (err) {

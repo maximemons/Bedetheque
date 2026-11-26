@@ -16,7 +16,7 @@ export async function render(ctx) {
 
   let bd = null;
   if (id) {
-    bd = await getBd(ctx.uid, id);
+    bd = await getBd(ctx.libId, id);
     if (!ctx.alive()) return;
     if (!bd) return ctx.render(emptyState("Cet album n’existe plus"));
   }
@@ -26,7 +26,7 @@ export async function render(ctx) {
     if (q.get("isbn")) pre.isbn = q.get("isbn");
     if (q.get("num")) pre.numero = parseInt(q.get("num"), 10);
     if (q.get("col")) {
-      const c = await getCollectionDoc(ctx.uid, q.get("col")).catch(() => null);
+      const c = await getCollectionDoc(ctx.libId, q.get("col")).catch(() => null);
       if (c) { pre.collectionName = c.name; pre.publisherName = c.publisherName; }
     }
     if (!ctx.alive()) return;
@@ -156,7 +156,7 @@ export async function render(ctx) {
     const dl = ctx.el.querySelector(`#${listId}`);
     let cache = [];
     input.addEventListener("input", debounce(async () => {
-      const items = await suggest(ctx.uid, kind, input.value).catch(() => []);
+      const items = await suggest(ctx.libId, kind, input.value).catch(() => []);
       cache = items;
       dl.innerHTML = items.map((i) => `<option value="${esc(i.name)}">`).join("");
     }, 300));
@@ -171,7 +171,7 @@ export async function render(ctx) {
 
   async function checkDuplicate(isbn) {
     if (bd || !isValidIsbn(isbn)) return;
-    const dup = await findBdByIsbn(ctx.uid, isbn).catch(() => null);
+    const dup = await findBdByIsbn(ctx.libId, isbn).catch(() => null);
     if (dup && ctx.alive()) {
       msg.innerHTML = `Vous avez déjà cet album : <a href="${ctx.link(`bd/${dup.id}`)}">${esc(dup.titre)}</a>. Vous pouvez tout de même l’ajouter (deuxième exemplaire).`;
     }
@@ -231,13 +231,13 @@ export async function render(ctx) {
     form.querySelectorAll("button[type=submit]").forEach((b) => (b.disabled = true));
     try {
       const photo = cover.photo || (cover.removed && bd?.hasCoverPhoto ? "remove" : null);
-      const newId = await saveBd(ctx.uid, data, bd, { photo });
+      const newId = await saveBd(ctx.libId, data, bd, { photo });
       toast(bd ? "Album enregistré" : "Album ajouté");
       if (go === "next") {
         const qs = new URLSearchParams({ scan: "1" });
         if (data.collectionName) {
           // Enchaîner les tomes d'une même série
-          const saved = await getBd(ctx.uid, newId).catch(() => null);
+          const saved = await getBd(ctx.libId, newId).catch(() => null);
           if (saved?.collectionId) qs.set("col", saved.collectionId);
           if (saved?.numero != null) qs.set("num", saved.numero + 1);
         }
