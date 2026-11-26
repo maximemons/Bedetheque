@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query, where, orderBy, limit,
-  startAfter, increment, serverTimestamp, documentId, getCountFromServer
+  startAfter, increment, serverTimestamp, documentId, getCountFromServer, deleteDoc, collectionGroup, Timestamp
 } from "./fs.js";
 import {
   normalize, buildKeywords, buildNameKeywords, searchTokens, seriesSortKey, chunk, hashStr, sleep
@@ -17,6 +17,11 @@ import { BD_SORTS, COLLECTION_SORTS, PUBLISHER_SORTS, ETAT_KEYS, DEFAULT_HOME } 
  *   users/{uid}/collections/{id}   séries : nom, éditeur, nombre de tomes, nombre possédé
  *   users/{uid}/publishers/{id}    éditeurs : nom, nombre de collections
  *   users/{uid}/covers/{bdId}      photo de couverture en grand (prise avec le téléphone)
+ *   users/{uid}/members/{memberUid} co-propriétaires : uid, nom affiché choisi, invitation utilisée
+ *   users/{uid}/invites/{code}     invitations en attente (usage unique, expirent au bout de 7 jours)
+ *
+ * Le propriétaire et ses co-propriétaires lisent et écrivent les mêmes données sous users/{uid} :
+ * toutes les fonctions ci-dessous prennent l'uid du PROPRIÉTAIRE de la bédéthèque.
  *
  * Avec des dizaines de milliers d'albums, rien n'est jamais chargé en entier :
  * les listes sont paginées, les compteurs sont tenus à jour par incréments,
@@ -103,6 +108,91 @@ function bdStatsDelta(bd, sign) {
 function normCote(v) {
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= 3 ? n : 0;
+}
+
+// ---------------------------------------------------------------- Co-propriétaires
+
+const memberRef = (ownerUid, memberUid) => doc(db, "users", ownerUid, "members", memberUid);
+const inviteRef = (ownerUid, code) => doc(db, "users", ownerUid, "invites", code);
+export const INVITE_DAYS = 7;
+
+function randomCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Crée une invitation à usage unique. Le code (128 bits aléatoires) sert de secret. */
+export async function createInvite(ownerUid, ownerName) {
+  const code = randomCode();
+  const expiresAt = Timestamp.fromMillis(Date.now() + INVITE_DAYS * 86400000);
+  await setDoc(inviteRef(ownerUid, code), { ownerName: String(ownerName).trim().slice(0, 40), createdAt: serverTimestamp(), expiresAt });
+  return { id: code, expiresAt };
+}
+
+/** Invitations encore valides ; les expirées sont supprimées au passage. */
+export async function listInvites(ownerUid) {
+  const snap = await getDocs(coll(ownerUid, "invites"));
+  const now = Date.now();
+  const valid = [];
+  for (const d of snap.docs) {
+    const exp = d.data().expiresAt?.toMillis?.() || 0;
+    if (exp > now) valid.push({ id: d.id, ...d.data() });
+    else deleteDoc(d.ref).catch(() => {});
+  }
+  return valid.sort((a, b) => b.expiresAt.toMillis() - a.expiresAt.toMillis());
+}
+
+export async function deleteInvite(ownerUid, code) {
+  await deleteDoc(inviteRef(ownerUid, code));
+}
+
+export async function getInvite(ownerUid, code) {
+  const s = await getDoc(inviteRef(ownerUid, code));
+  if (!s.exists()) return null;
+  const data = s.data();
+  if ((data.expiresAt?.toMillis?.() || 0) <= Date.now()) return null;
+  return { id: s.id, ...data };
+}
+
+/** Rejoint une bédéthèque : inscription comme co-propriétaire et consommation de l'invitation, en un seul lot. */
+export async function joinLibrary(ownerUid, code, myUid, name) {
+  const b = writeBatch(db);
+  b.set(memberRef(ownerUid, myUid), { uid: myUid, name: String(name).trim().slice(0, 40), invite: code, joinedAt: serverTimestamp() });
+  b.delete(inviteRef(ownerUid, code));
+  await b.commit();
+}
+
+/** Mon inscription comme co-propriétaire de cette bédéthèque (null si je ne le suis pas). */
+export async function getMembership(ownerUid, myUid) {
+  const s = await getDoc(memberRef(ownerUid, myUid));
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+
+export async function listMembers(ownerUid) {
+  const snap = await getDocs(coll(ownerUid, "members"));
+  return snapToList(snap).sort((a, b) => (a.joinedAt?.toMillis?.() || 0) - (b.joinedAt?.toMillis?.() || 0));
+}
+
+/** Retire un co-propriétaire (par le propriétaire) ou quitte une bédéthèque (par le co-propriétaire). */
+export async function removeMember(ownerUid, memberUid) {
+  await deleteDoc(memberRef(ownerUid, memberUid));
+}
+
+export async function renameMember(ownerUid, myUid, name) {
+  await updateDoc(memberRef(ownerUid, myUid), { name: String(name).trim().slice(0, 40) });
+}
+
+/** Bédéthèques dont je suis co-propriétaire : [{ ownerUid, ownerName, myName }]. */
+export async function myLibraries(myUid) {
+  const snap = await getDocs(query(collectionGroup(db, "members"), where("uid", "==", myUid)));
+  const out = [];
+  for (const d of snap.docs) {
+    const ownerUid = d.ref.parent.parent.id;
+    if (ownerUid === myUid) continue;
+    const owner = await getUserDoc(ownerUid).catch(() => null);
+    out.push({ ownerUid, ownerName: owner?.shareName || "", myName: d.data().name || "" });
+  }
+  return out.sort((a, b) => a.ownerName.localeCompare(b.ownerName, "fr"));
 }
 
 // ---------------------------------------------------------------- BD : normalisation

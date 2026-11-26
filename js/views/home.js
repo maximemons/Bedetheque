@@ -5,7 +5,7 @@ import { esc, fmtInt, fmtDate } from "../utils.js";
 import { errorHtml } from "../ui.js";
 
 export async function render(ctx) {
-  ctx.setTitle(ctx.readOnly ? "Bédéthèque partagée" : "Ma bédéthèque");
+  ctx.setTitle(ctx.role === "owner" ? "Ma bédéthèque" : ctx.libraryName ? `Bédéthèque de ${ctx.libraryName}` : "Bédéthèque partagée");
   if (!ctx.readOnly) ctx.setFab({ label: "Ajouter une BD", href: "bd/new" });
 
   const home = { ...DEFAULT_HOME, ...(ctx.profile?.home || {}) };
@@ -13,7 +13,7 @@ export async function render(ctx) {
   const n = home.recentCount || 8;
 
   ctx.render(`<div class="home">${widgets.map((w) => `<section class="block" data-w="${w}">${spinner()}</section>`).join("")}</div>
-    ${widgets.length ? "" : emptyState("L’accueil est vide", "Choisissez les blocs à afficher dans Mon compte.", ctx.readOnly ? "" : `<a class="btn btn-primary" href="${ctx.link("compte")}">Régler l’accueil</a>`)}`);
+    ${widgets.length ? "" : emptyState("L’accueil est vide", ctx.role === "owner" ? "Choisissez les blocs à afficher dans Mon compte." : "", ctx.role !== "owner" ? "" : `<a class="btn btn-primary" href="${ctx.link("compte")}">Régler l’accueil</a>`)}`);
 
   let stats = null;
   const needStats = widgets.some((w) => ["counts", "cotes", "states"].includes(w));

@@ -26,6 +26,14 @@ Une bédéthèque personnelle, pensée pour le téléphone : albums, collections
 
 **Partage en lecture seule** (Mon compte › Partage) : un lien `…/#/p/<identifiant>` montre la bédéthèque sans permettre de la modifier, même à quelqu’un sans compte. Le partage se coupe d’un clic.
 
+**Co-propriétaires** (Mon compte › Co-propriétaires) : le propriétaire invite d’autres comptes à partager **toute** sa bédéthèque, en lecture et en écriture.
+- Le propriétaire choisit son **nom affiché**, puis appuie sur **Inviter un co-propriétaire** : un lien `…/#/rejoindre/<identifiant>/<code>` est créé. Chaque lien ne sert qu’à **une seule personne** et expire au bout de **7 jours** ; on peut l’annuler avant.
+- L’invité ouvre le lien, se connecte (ou crée un compte), choisit le nom sous lequel il apparaîtra et accepte. Il ouvre ensuite la bédéthèque commune à l’adresse `…/#/b/<identifiant>/` ; un bandeau violet rappelle qu’il y est **co-propriétaire**, avec un lien vers sa propre bédéthèque.
+- Un co-propriétaire peut tout faire sur les albums, collections, éditeurs et photos : ajouter, scanner, modifier, supprimer, importer un CSV, recalculer les compteurs.
+- Le **propriétaire** garde seul la main sur le partage en lecture seule, la page d’accueil, son nom affiché et la liste des co-propriétaires. La liste montre chacun avec son rôle : **Propriétaire** ou **Co-propriétaire**.
+- Le propriétaire retire un co-propriétaire d’un appui ; un co-propriétaire peut **quitter** la bédéthèque. L’accès est coupé immédiatement ; ce qu’il a ajouté reste.
+- Chaque compte garde sa propre bédéthèque. « Mes bédéthèques », dans le compte, permet de passer de l’une à l’autre ; l’appli rouvre la dernière utilisée.
+
 **Connexion** : Google, e-mail + mot de passe, ou e-mail seul avec un **lien de connexion** (sans mot de passe).
 
 **Hors connexion** : l’appli s’ouvre sans réseau (service worker) et les données déjà vues restent consultables (cache local Firestore). Les ajouts faits hors ligne partent au retour du réseau.
@@ -85,14 +93,15 @@ Projet : `bedetheque-706f1` (déjà renseigné dans `js/firebase-config.js` et `
 2. Dépôt › Settings › Pages › Source : **Deploy from a branch**, branche `main`, dossier `/ (root)`.
 3. Le site est servi en HTTPS, ce qu’exige la caméra pour le scan.
 
-Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v2`…) pour que les téléphones prennent la nouvelle version sans attendre.
+Après une mise à jour, augmenter `CACHE` dans `sw.js` (`bedetheque-v3`…) pour que les téléphones prennent la nouvelle version sans attendre.
 
 Le site fonctionne aussi avec Firebase Hosting : `firebase deploy --only hosting`.
 
 ## Confidentialité et partage
 
-- Chaque compte ne lit et n’écrit que ses propres données (`firestore.rules`).
-- Aucune donnée d’identité (e-mail, nom) n’est enregistrée dans Firestore : le document `users/{uid}` ne contient que le réglage du partage, le nom affiché choisi par l’utilisateur et les réglages de l’accueil.
+- Chaque compte ne lit et n’écrit que ses propres données, et celles des bédéthèques dont il est co-propriétaire (`firestore.rules`). Un compte ne peut s’inscrire comme co-propriétaire qu’avec une invitation valide, qu’il consomme dans la même écriture.
+- Aucune donnée d’identité issue de la connexion (e-mail, nom du compte Google) n’est enregistrée dans Firestore : le document `users/{uid}` ne contient que le réglage du partage, le nom affiché choisi par l’utilisateur et les réglages de l’accueil ; une fiche de co-propriétaire ne contient que son identifiant technique, le nom affiché qu’il a lui-même choisi et la date d’arrivée.
+- Le nom affiché d’un co-propriétaire n’est visible que du propriétaire et des autres co-propriétaires, jamais des visiteurs du partage en lecture seule.
 - Quand le partage est actif, **tous les champs des albums sont lisibles** par les visiteurs, y compris cotes, dates d’achat, photos et notes. Ne pas mettre d’informations personnelles dans les notes d’une bédéthèque partagée.
 - Les recherches ISBN partent directement du navigateur vers Google Books et Open Library (seul l’ISBN est envoyé).
 
@@ -131,8 +140,9 @@ js/views/bds.js            liste et fiche album
 js/views/bd-form.js        ajout et modification d'un album
 js/views/collections.js    liste, fiche et formulaire collection
 js/views/publishers.js     liste, fiche et formulaire éditeur
-js/views/account.js        compte : accueil, partage, données
+js/views/account.js        compte : bédéthèques, co-propriétaires, accueil, partage, données
 js/views/import.js         import CSV de masse
+js/views/join.js           acceptation d'une invitation de co-propriétaire
 js/vendor/                 papaparse (MIT), html5-qrcode (Apache-2.0)
 sw.js                      service worker (appli hors connexion)
 manifest.webmanifest       installation sur l'écran d'accueil
@@ -154,7 +164,13 @@ users/{uid}/bds/{id}           isbn, titre, collectionId, collectionName, numero
 users/{uid}/collections/{id}   name, nameLower, publisherId, publisherName, totalVolumes, ownedCount, notes, keywords[]
 users/{uid}/publishers/{id}    name, nameLower, collectionCount, notes, keywords[]
 users/{uid}/covers/{bdId}      data (photo de couverture en grand, JPEG)
+users/{uid}/members/{memberUid} uid, name (nom affiché choisi), invite, joinedAt          co-propriétaires
+users/{uid}/invites/{code}     ownerName, createdAt, expiresAt                          invitations en attente
 ```
+
+Propriétaire et co-propriétaires travaillent sur les mêmes documents, sous `users/{uid du propriétaire}`. La liste « Mes bédéthèques » d’un compte vient d’une requête de groupe sur `members` (champ `uid`), d’où l’entrée de `fieldOverrides` dans `firestore.indexes.json`.
+
+Les règles vérifient l’appartenance par un `exists()` sur `members/{uid}` à chaque écriture d’un co-propriétaire. Firestore met en cache les accès répétés au même document dans une requête, ce qui permet les lots de l’import ; si un import de co-propriétaire était refusé par lots entiers, réduire la taille des lots dans `js/views/import.js`.
 
 Les champs triables existent toujours (éventuellement à `null`), sinon Firestore exclurait l’album des tris.
 
@@ -169,4 +185,6 @@ Les champs triables existent toujours (éventuellement à `null`), sinon Firesto
 #/editeurs     #/editeur/<id>     #/editeur/new     #/editeur/<id>/edit
 #/compte  #/import
 #/p/<uid>/…             mêmes pages en lecture seule (partage)
+#/b/<uid>/…             mêmes pages pour un co-propriétaire (accès complet)
+#/rejoindre/<uid>/<code>  accepter une invitation de co-propriétaire
 ```

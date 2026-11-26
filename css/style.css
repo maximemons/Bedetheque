@@ -147,6 +147,23 @@ code { font-size: .9em; background: var(--soft); padding: 1px 4px; border-radius
   background: var(--yellow); color: #16181D; font-weight: 700; font-size: .9rem;
   border-bottom: var(--bw) solid var(--line);
 }
+.share-banner.coowner { background: var(--violet); color: #fff; }
+.share-banner span { min-width: 0; overflow-wrap: anywhere; }
+.share-banner a { margin-left: auto; flex: none; color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Co-propriétaires */
+.member-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; border-top: var(--bw) solid var(--soft); }
+.member-list li { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 0; border-bottom: var(--bw) solid var(--soft); }
+.member-list .who { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.member-list .who small { display: block; color: var(--ink-2); font-size: .82rem; }
+.member-list a.who { color: inherit; text-decoration: none; }
+.member-list li.current .who strong::after { content: " ·  ouverte"; font-weight: 400; color: var(--ink-2); font-size: .85rem; }
+.role {
+  flex: none; padding: 2px 8px; border: var(--bw) solid var(--line); border-radius: 999px;
+  font-family: var(--f-display); font-size: .74rem; font-weight: 700; white-space: nowrap;
+}
+.role-owner { background: var(--blue); color: var(--blue-ink); }
+.role-coowner { background: var(--yellow); color: #16181D; }
 
 /* ---------------------------------------------------------------- Vue */
 .view {

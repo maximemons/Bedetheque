@@ -1,13 +1,27 @@
 rules_version = '2';
 
-// Chaque compte ne lit et n'écrit que ses propres données.
-// Si le propriétaire active le partage (users/{uid}.shareEnabled == true),
-// tout le monde peut LIRE ses albums, collections, éditeurs, photos et compteurs, sans rien pouvoir modifier.
+// Rôles sur une bédéthèque users/{uid} :
+//   - propriétaire     : le compte uid. Seul à gérer le partage public, l'accueil et les co-propriétaires.
+//   - co-propriétaire  : un compte inscrit dans users/{uid}/members/{son uid}. Lit et modifie
+//                        toute la bédéthèque (albums, collections, éditeurs, photos, compteurs, import).
+//   - visiteur         : n'importe qui, en lecture seule, si le propriétaire a activé le partage.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null;
+    }
+
     function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isCoOwner(uid) {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(uid)/members/$(request.auth.uid));
+    }
+
+    function canWrite(uid) {
+      return isOwner(uid) || isCoOwner(uid);
     }
 
     function isShared(uid) {
@@ -15,13 +29,17 @@ service cloud.firestore {
     }
 
     function canRead(uid) {
-      return isOwner(uid) || isShared(uid);
+      return canWrite(uid) || isShared(uid);
+    }
+
+    function validName(n) {
+      return n is string && n.size() >= 1 && n.size() <= 40;
     }
 
     match /users/{uid} {
-      // Ce document ne contient que : shareEnabled, shareName, réglages de l'accueil.
+      // Ce document ne contient que : shareEnabled, shareName (nom affiché), réglages de l'accueil.
       // Aucun e-mail ni donnée d'identité n'y est stocké.
-      allow read: if isOwner(uid) || resource.data.get('shareEnabled', false) == true;
+      allow read: if isOwner(uid) || resource.data.get('shareEnabled', false) == true || isCoOwner(uid);
       allow create, update: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['shareEnabled', 'shareName', 'home', 'createdAt'])
         && request.resource.data.get('shareName', '') is string
@@ -30,29 +48,72 @@ service cloud.firestore {
 
       match /meta/{docId} {
         allow read: if canRead(uid);
-        allow write: if isOwner(uid);
+        allow write: if canWrite(uid);
       }
 
       match /bds/{id} {
         allow read: if canRead(uid);
-        allow write: if isOwner(uid);
+        allow write: if canWrite(uid);
       }
 
       match /collections/{id} {
         allow read: if canRead(uid);
-        allow write: if isOwner(uid);
+        allow write: if canWrite(uid);
       }
 
       match /publishers/{id} {
         allow read: if canRead(uid);
-        allow write: if isOwner(uid);
+        allow write: if canWrite(uid);
       }
 
       // Photos de couverture prises au téléphone (≈ 200 Ko maximum chacune).
       match /covers/{id} {
         allow read: if canRead(uid);
-        allow write: if isOwner(uid);
+        allow write: if canWrite(uid);
       }
+
+      // Invitations à devenir co-propriétaire. L'identifiant (code aléatoire) sert de secret :
+      // seul celui qui a le lien peut lire l'invitation. Une invitation ne sert qu'une fois.
+      match /invites/{code} {
+        allow get: if signedIn();
+        allow list: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['ownerName', 'createdAt', 'expiresAt'])
+          && validName(request.resource.data.ownerName)
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt < request.time + duration.value(31, 'd');
+        // Le propriétaire annule ; l'invité la consomme dans le même lot que son inscription.
+        allow delete: if isOwner(uid)
+          || (signedIn() && getAfter(/databases/$(database)/documents/users/$(uid)/members/$(request.auth.uid)).data.invite == code);
+      }
+
+      // Co-propriétaires : { uid, name (nom choisi par la personne), invite, joinedAt }.
+      match /members/{memberId} {
+        allow read: if canWrite(uid) || (signedIn() && request.auth.uid == memberId);
+        // On ne peut s'inscrire soi-même qu'avec une invitation valide, consommée dans le même lot.
+        allow create: if signedIn()
+          && request.auth.uid == memberId
+          && memberId != uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'invite', 'joinedAt'])
+          && request.resource.data.uid == memberId
+          && validName(request.resource.data.name)
+          && request.resource.data.invite is string
+          && request.resource.data.joinedAt == request.time
+          && get(/databases/$(database)/documents/users/$(uid)/invites/$(request.resource.data.invite)).data.expiresAt > request.time
+          && !existsAfter(/databases/$(database)/documents/users/$(uid)/invites/$(request.resource.data.invite));
+        // Un co-propriétaire peut changer son nom affiché, rien d'autre.
+        allow update: if signedIn()
+          && request.auth.uid == memberId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && validName(request.resource.data.name);
+        // Le propriétaire retire un co-propriétaire ; un co-propriétaire peut partir.
+        allow delete: if isOwner(uid) || (signedIn() && request.auth.uid == memberId);
+      }
+    }
+
+    // « Les bédéthèques dont je suis co-propriétaire » : requête sur toutes les sous-collections members.
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }

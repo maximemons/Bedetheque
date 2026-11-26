@@ -9,7 +9,7 @@ import { scanIsbn } from "../scanner.js";
 const VIEW_KEY = "bdt:libraryView";
 
 export async function renderList(ctx) {
-  ctx.setTitle(ctx.readOnly ? "BD" : "Mes BD");
+  ctx.setTitle(ctx.role === "owner" ? "Mes BD" : "BD");
   if (!ctx.readOnly) ctx.setFab({ label: "Ajouter", href: "bd/new" });
 
   const q = ctx.query;

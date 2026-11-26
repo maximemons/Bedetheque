@@ -1,13 +1,13 @@
 // Service worker : l'appli s'ouvre même sans réseau.
 // Les données, elles, viennent du cache local de Firestore.
-const CACHE = "bedetheque-v2";
+const CACHE = "bedetheque-v3";
 const SHELL = [
   "./", "./index.html", "./css/style.css", "./manifest.webmanifest", "./favicon.svg",
   "./icons/icon-192.png", "./icons/icon-512.png",
   "./js/app.js", "./js/auth.js", "./js/components.js", "./js/constants.js", "./js/db.js",
   "./js/firebase-config.js", "./js/fs.js", "./js/image.js", "./js/isbn.js", "./js/scanner.js", "./js/ui.js", "./js/utils.js",
   "./js/views/account.js", "./js/views/bd-form.js", "./js/views/bds.js", "./js/views/collections.js",
-  "./js/views/home.js", "./js/views/import.js", "./js/views/publishers.js",
+  "./js/views/home.js", "./js/views/import.js", "./js/views/join.js", "./js/views/publishers.js",
   "./js/vendor/papaparse.min.js"
 ];
 
